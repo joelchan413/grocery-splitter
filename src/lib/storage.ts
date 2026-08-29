@@ -23,9 +23,10 @@ const STORAGE_KEYS = {
 
 export const AVAILABLE_MODELS = [
   { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', desc: 'Latest, fastest & highest OCR accuracy', isDefault: true },
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', desc: 'High performance multimodal model' },
-  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', desc: 'Fast low-latency inference' },
-  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', desc: 'Standard legacy flash model' },
+  { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash', desc: 'Next-gen multimodal reasoning' },
+  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', desc: 'Balanced speed and vision precision' },
+  { id: 'gemini-3.0-flash', name: 'Gemini 3.0 Flash', desc: 'Fast multimodal structured extraction' },
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', desc: 'High efficiency vision model' },
 ] as const;
 
 export function loadSelectedAiModel(): string {

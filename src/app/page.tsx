@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   loadHousehold,
   saveHousehold,
@@ -15,9 +15,12 @@ import {
   DEFAULT_HOUSEHOLD,
 } from '@/lib/storage';
 import { Household, Trip } from '@/types';
+import { useTripSync } from '@/hooks/useTripSync';
 import { Header } from '@/components/Header';
 import { HouseholdModal } from '@/components/HouseholdModal';
 import { SettingsModal } from '@/components/SettingsModal';
+import { ShareTripModal } from '@/components/ShareTripModal';
+import { IdentifyModal } from '@/components/IdentifyModal';
 import { ReceiptScanner } from '@/components/ReceiptScanner';
 import { ReceiptReview } from '@/components/ReceiptReview';
 import { ClaimingBoard } from '@/components/ClaimingBoard';
@@ -34,51 +37,119 @@ export default function Home() {
   const [isHouseholdModalOpen, setIsHouseholdModalOpen] = useState(false);
   const [isFirstTimeSetup, setIsFirstTimeSetup] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isIdentifyModalOpen, setIsIdentifyModalOpen] = useState(false);
   const [tripHistory, setTripHistory] = useState<Trip[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
 
-  // Initialize from LocalStorage
-  useEffect(() => {
-    const savedHousehold = loadHousehold();
-    const savedTrip = loadActiveTrip();
-    const savedHistory = loadTripHistory();
-    const savedActiveP = loadActiveParticipantId();
-    const initialized = isHouseholdInitialized();
-
-    setHousehold(savedHousehold);
-    setActiveTrip(savedTrip);
-    setTripHistory(savedHistory);
-    setActiveParticipantId(savedActiveP);
-
-    if (!initialized) {
-      setIsHouseholdModalOpen(true);
-      setIsFirstTimeSetup(true);
-    }
-
-    if (savedTrip) {
-      if (savedTrip.status === 'review') {
-        setView('review');
-      } else if (savedTrip.status === 'settled') {
-        setView('settlement');
-      } else {
-        setView('claiming');
+  // Callback when server-side SSE sends an updated trip
+  const handleTripUpdatedFromServer = useCallback((updated: Trip) => {
+    setActiveTrip((prev) => {
+      // Prevent stale overwrite if user already moved to settlement
+      if (prev?.id === updated.id) {
+        saveActiveTrip(updated);
+        return updated;
       }
-    }
-
-    setIsHydrated(true);
+      return prev;
+    });
   }, []);
 
-  // Save changes to storage
-  const handleUpdateHousehold = (updated: Household) => {
+  // Real-time synchronization hook
+  const { broadcastTripUpdate, syncStatus } = useTripSync({
+    trip: activeTrip,
+    onTripUpdated: handleTripUpdatedFromServer,
+  });
+
+  // 1. Initial Load & Hydration
+  useEffect(() => {
+    async function init() {
+      // Load local state as fast initial fallback
+      const savedHousehold = loadHousehold();
+      const savedTrip = loadActiveTrip();
+      const savedHistory = loadTripHistory();
+      const savedActiveP = loadActiveParticipantId();
+      const initialized = isHouseholdInitialized();
+
+      setHousehold(savedHousehold);
+      setActiveTrip(savedTrip);
+      setTripHistory(savedHistory);
+      setActiveParticipantId(savedActiveP);
+
+      // Check if joining via share URL param: ?trip=xyz
+      const urlParams = new URLSearchParams(window.location.search);
+      const sharedTripId = urlParams.get('trip');
+
+      if (sharedTripId) {
+        try {
+          const res = await fetch(`/api/trips/${encodeURIComponent(sharedTripId)}`);
+          if (res.ok) {
+            const serverTrip: Trip = await res.json();
+            setActiveTrip(serverTrip);
+            saveActiveTrip(serverTrip);
+            setView(serverTrip.status === 'review' ? 'review' : serverTrip.status === 'settled' ? 'settlement' : 'claiming');
+
+            // Prompt roommate identification if first time on this device
+            if (!localStorage.getItem('grocery_splitter_active_participant_v1')) {
+              setIsIdentifyModalOpen(true);
+            }
+          }
+        } catch (e) {
+          console.error('Error joining shared trip:', e);
+        }
+      } else if (savedTrip) {
+        if (savedTrip.status === 'review') {
+          setView('review');
+        } else if (savedTrip.status === 'settled') {
+          setView('settlement');
+        } else {
+          setView('claiming');
+        }
+      }
+
+      if (!initialized && !sharedTripId) {
+        setIsHouseholdModalOpen(true);
+        setIsFirstTimeSetup(true);
+      }
+
+      // Sync latest household from server
+      try {
+        const hhRes = await fetch('/api/household');
+        if (hhRes.ok) {
+          const serverHousehold: Household = await hhRes.json();
+          setHousehold(serverHousehold);
+          saveHousehold(serverHousehold);
+        }
+      } catch {}
+
+      setIsHydrated(true);
+    }
+
+    init();
+  }, []);
+
+  // Update household locally and on server
+  const handleUpdateHousehold = async (updated: Household) => {
     setHousehold(updated);
     saveHousehold(updated);
     setHouseholdInitialized(true);
     setIsFirstTimeSetup(false);
+
+    try {
+      await fetch('/api/household', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch (err) {
+      console.error('Error saving household to server:', err);
+    }
   };
 
+  // Update trip locally and broadcast to connected roommates
   const handleUpdateTrip = (updated: Trip) => {
     setActiveTrip(updated);
     saveActiveTrip(updated);
+    broadcastTripUpdate(updated);
   };
 
   const handleSelectParticipant = (id: string) => {
@@ -96,31 +167,53 @@ export default function Home() {
     }
     setActiveTrip(null);
     saveActiveTrip(null);
+    window.history.replaceState({}, '', window.location.pathname);
     setView('scanner');
   };
 
-  const handleTripScanned = (newTrip: Trip) => {
+  const handleTripScanned = async (newTrip: Trip) => {
     setActiveTrip(newTrip);
     saveActiveTrip(newTrip);
     setView('review');
+
+    // Save to server database immediately
+    try {
+      await fetch('/api/trips', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newTrip),
+      });
+    } catch (err) {
+      console.error('Failed to create trip on server:', err);
+    }
   };
 
   const handleConfirmReview = () => {
     if (!activeTrip) return;
     const updated = { ...activeTrip, status: 'claiming' as const };
-    setActiveTrip(updated);
-    saveActiveTrip(updated);
+    handleUpdateTrip(updated);
     setView('claiming');
   };
 
-  const handleArchiveCurrentTrip = () => {
+  const handleArchiveCurrentTrip = async () => {
     if (!activeTrip) return;
     const settledTrip: Trip = { ...activeTrip, status: 'settled' };
     archiveTrip(settledTrip);
     setTripHistory(loadTripHistory());
     setActiveTrip(null);
     saveActiveTrip(null);
+    window.history.replaceState({}, '', window.location.pathname);
     setView('history');
+
+    try {
+      await fetch(`/api/trips/${encodeURIComponent(settledTrip.id)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'archive' }),
+      });
+    } catch (err) {
+      console.error('Error archiving trip on server:', err);
+    }
   };
 
   if (!isHydrated) {
@@ -139,10 +232,12 @@ export default function Home() {
       <Header
         household={household}
         activeView={view}
+        hasActiveTrip={Boolean(activeTrip && (view === 'claiming' || view === 'settlement' || view === 'review'))}
         onNewTrip={handleNewTrip}
         onOpenHistory={() => setView('history')}
         onOpenHousehold={() => setIsHouseholdModalOpen(true)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenShare={() => setIsShareModalOpen(true)}
       />
 
       <main className="flex-1">
@@ -216,6 +311,24 @@ export default function Home() {
       <SettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
+      />
+
+      {activeTrip && (
+        <ShareTripModal
+          isOpen={isShareModalOpen}
+          trip={activeTrip}
+          household={household}
+          onClose={() => setIsShareModalOpen(false)}
+        />
+      )}
+
+      <IdentifyModal
+        isOpen={isIdentifyModalOpen}
+        household={household}
+        onSelect={(pId) => {
+          handleSelectParticipant(pId);
+          setIsIdentifyModalOpen(false);
+        }}
       />
     </div>
   );

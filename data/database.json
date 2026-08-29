@@ -1,0 +1,629 @@
+{
+  "household": {
+    "id": "household-default",
+    "name": "Apartment 4B",
+    "participants": [
+      {
+        "id": "p1",
+        "name": "Joel",
+        "avatarEmoji": "🛒",
+        "color": "#2563EB",
+        "venmoHandle": "@joel"
+      },
+      {
+        "id": "p2",
+        "name": "Alex",
+        "avatarEmoji": "🥑",
+        "color": "#059669",
+        "venmoHandle": "@alex"
+      },
+      {
+        "id": "p3",
+        "name": "Sam",
+        "avatarEmoji": "🧀",
+        "color": "#D97706",
+        "venmoHandle": "@sam"
+      },
+      {
+        "id": "p4",
+        "name": "Jordan",
+        "avatarEmoji": "☕",
+        "color": "#7C3AED",
+        "venmoHandle": "@jordan"
+      }
+    ]
+  },
+  "activeTripId": null,
+  "trips": {
+    "trip-1788041043104": {
+      "id": "trip-1788041043104",
+      "householdId": "household-default",
+      "storeName": "Trader Joe's",
+      "date": "2026-08-29",
+      "payerId": "p1",
+      "items": [
+        {
+          "id": "tj-1",
+          "name": "Organic Whole Milk (Gallon)",
+          "quantity": 1,
+          "unitPrice": 4.49,
+          "totalPrice": 4.49,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-2",
+          "name": "Organic Bananas (Bunch)",
+          "quantity": 1,
+          "unitPrice": 1.99,
+          "totalPrice": 1.99,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-3",
+          "name": "Avocados Bag (4ct)",
+          "quantity": 4,
+          "unitPrice": 1.25,
+          "totalPrice": 5,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-4",
+          "name": "Sourdough Bread Loaf",
+          "quantity": 1,
+          "unitPrice": 3.99,
+          "totalPrice": 3.99,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-5",
+          "name": "Cold Brew Coffee Concentrate",
+          "quantity": 2,
+          "unitPrice": 7.99,
+          "totalPrice": 15.98,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-6",
+          "name": "Greek Honey Yogurt (32oz)",
+          "quantity": 1,
+          "unitPrice": 5.49,
+          "totalPrice": 5.49,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-7",
+          "name": "Dark Chocolate Peanut Butter Cups",
+          "quantity": 2,
+          "unitPrice": 4.49,
+          "totalPrice": 8.98,
+          "isTaxable": true
+        },
+        {
+          "id": "tj-8",
+          "name": "Citrus Scent Dish Soap",
+          "quantity": 1,
+          "unitPrice": 3.99,
+          "totalPrice": 3.99,
+          "isTaxable": true
+        },
+        {
+          "id": "tj-9",
+          "name": "Recycled Paper Towels (2pk)",
+          "quantity": 1,
+          "unitPrice": 4.99,
+          "totalPrice": 4.99,
+          "isTaxable": true
+        }
+      ],
+      "taxTotal": 1.6,
+      "basketDiscount": 0,
+      "receiptImages": [],
+      "claims": {},
+      "readyParticipantIds": [],
+      "status": "claiming",
+      "createdAt": "2026-08-29T22:04:03.104Z"
+    },
+    "trip-1788041047335": {
+      "id": "trip-1788041047335",
+      "householdId": "household-default",
+      "storeName": "Trader Joe's",
+      "date": "2026-08-29",
+      "payerId": "p1",
+      "items": [
+        {
+          "id": "tj-1",
+          "name": "Organic Whole Milk (Gallon)",
+          "quantity": 1,
+          "unitPrice": 4.49,
+          "totalPrice": 4.49,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-2",
+          "name": "Organic Bananas (Bunch)",
+          "quantity": 1,
+          "unitPrice": 1.99,
+          "totalPrice": 1.99,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-3",
+          "name": "Avocados Bag (4ct)",
+          "quantity": 4,
+          "unitPrice": 1.25,
+          "totalPrice": 5,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-4",
+          "name": "Sourdough Bread Loaf",
+          "quantity": 1,
+          "unitPrice": 3.99,
+          "totalPrice": 3.99,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-5",
+          "name": "Cold Brew Coffee Concentrate",
+          "quantity": 2,
+          "unitPrice": 7.99,
+          "totalPrice": 15.98,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-6",
+          "name": "Greek Honey Yogurt (32oz)",
+          "quantity": 1,
+          "unitPrice": 5.49,
+          "totalPrice": 5.49,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-7",
+          "name": "Dark Chocolate Peanut Butter Cups",
+          "quantity": 2,
+          "unitPrice": 4.49,
+          "totalPrice": 8.98,
+          "isTaxable": true
+        },
+        {
+          "id": "tj-8",
+          "name": "Citrus Scent Dish Soap",
+          "quantity": 1,
+          "unitPrice": 3.99,
+          "totalPrice": 3.99,
+          "isTaxable": true
+        },
+        {
+          "id": "tj-9",
+          "name": "Recycled Paper Towels (2pk)",
+          "quantity": 1,
+          "unitPrice": 4.99,
+          "totalPrice": 4.99,
+          "isTaxable": true
+        }
+      ],
+      "taxTotal": 1.6,
+      "basketDiscount": 0,
+      "receiptImages": [],
+      "claims": {},
+      "readyParticipantIds": [],
+      "status": "claiming",
+      "createdAt": "2026-08-29T22:04:07.335Z"
+    },
+    "trip-1788041059642": {
+      "id": "trip-1788041059642",
+      "householdId": "household-default",
+      "storeName": "Trader Joe's",
+      "date": "2026-08-29",
+      "payerId": "p1",
+      "items": [
+        {
+          "id": "tj-1",
+          "name": "Organic Whole Milk (Gallon)",
+          "quantity": 1,
+          "unitPrice": 4.49,
+          "totalPrice": 4.49,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-2",
+          "name": "Organic Bananas (Bunch)",
+          "quantity": 1,
+          "unitPrice": 1.99,
+          "totalPrice": 1.99,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-3",
+          "name": "Avocados Bag (4ct)",
+          "quantity": 4,
+          "unitPrice": 1.25,
+          "totalPrice": 5,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-4",
+          "name": "Sourdough Bread Loaf",
+          "quantity": 1,
+          "unitPrice": 3.99,
+          "totalPrice": 3.99,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-5",
+          "name": "Cold Brew Coffee Concentrate",
+          "quantity": 2,
+          "unitPrice": 7.99,
+          "totalPrice": 15.98,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-6",
+          "name": "Greek Honey Yogurt (32oz)",
+          "quantity": 1,
+          "unitPrice": 5.49,
+          "totalPrice": 5.49,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-7",
+          "name": "Dark Chocolate Peanut Butter Cups",
+          "quantity": 2,
+          "unitPrice": 4.49,
+          "totalPrice": 8.98,
+          "isTaxable": true
+        },
+        {
+          "id": "tj-8",
+          "name": "Citrus Scent Dish Soap",
+          "quantity": 1,
+          "unitPrice": 3.99,
+          "totalPrice": 3.99,
+          "isTaxable": true
+        },
+        {
+          "id": "tj-9",
+          "name": "Recycled Paper Towels (2pk)",
+          "quantity": 1,
+          "unitPrice": 4.99,
+          "totalPrice": 4.99,
+          "isTaxable": true
+        }
+      ],
+      "taxTotal": 1.6,
+      "basketDiscount": 0,
+      "receiptImages": [],
+      "claims": {
+        "tj-1": {
+          "p1": 1,
+          "p2": 1
+        },
+        "tj-2": {
+          "p1": 1,
+          "p2": 1,
+          "p3": 1,
+          "p4": 1
+        }
+      },
+      "readyParticipantIds": [
+        "p2",
+        "p3",
+        "p4"
+      ],
+      "status": "settled",
+      "createdAt": "2026-08-29T22:04:19.642Z"
+    },
+    "trip-1788041064082": {
+      "id": "trip-1788041064082",
+      "householdId": "household-default",
+      "storeName": "Trader Joe's",
+      "date": "2026-08-29",
+      "payerId": "p1",
+      "items": [
+        {
+          "id": "tj-1",
+          "name": "Organic Whole Milk (Gallon)",
+          "quantity": 1,
+          "unitPrice": 4.49,
+          "totalPrice": 4.49,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-2",
+          "name": "Organic Bananas (Bunch)",
+          "quantity": 1,
+          "unitPrice": 1.99,
+          "totalPrice": 1.99,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-3",
+          "name": "Avocados Bag (4ct)",
+          "quantity": 4,
+          "unitPrice": 1.25,
+          "totalPrice": 5,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-4",
+          "name": "Sourdough Bread Loaf",
+          "quantity": 1,
+          "unitPrice": 3.99,
+          "totalPrice": 3.99,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-5",
+          "name": "Cold Brew Coffee Concentrate",
+          "quantity": 2,
+          "unitPrice": 7.99,
+          "totalPrice": 15.98,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-6",
+          "name": "Greek Honey Yogurt (32oz)",
+          "quantity": 1,
+          "unitPrice": 5.49,
+          "totalPrice": 5.49,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-7",
+          "name": "Dark Chocolate Peanut Butter Cups",
+          "quantity": 2,
+          "unitPrice": 4.49,
+          "totalPrice": 8.98,
+          "isTaxable": true
+        },
+        {
+          "id": "tj-8",
+          "name": "Citrus Scent Dish Soap",
+          "quantity": 1,
+          "unitPrice": 3.99,
+          "totalPrice": 3.99,
+          "isTaxable": true
+        },
+        {
+          "id": "tj-9",
+          "name": "Recycled Paper Towels (2pk)",
+          "quantity": 1,
+          "unitPrice": 4.99,
+          "totalPrice": 4.99,
+          "isTaxable": true
+        }
+      ],
+      "taxTotal": 1.6,
+      "basketDiscount": 0,
+      "receiptImages": [],
+      "claims": {
+        "tj-1": {
+          "p1": 1,
+          "p2": 1
+        },
+        "tj-2": {
+          "p1": 1,
+          "p2": 1,
+          "p3": 1,
+          "p4": 1
+        }
+      },
+      "readyParticipantIds": [
+        "p2",
+        "p3",
+        "p4"
+      ],
+      "status": "settled",
+      "createdAt": "2026-08-29T22:04:24.082Z"
+    }
+  },
+  "history": [
+    {
+      "id": "trip-1788041064082",
+      "householdId": "household-default",
+      "storeName": "Trader Joe's",
+      "date": "2026-08-29",
+      "payerId": "p1",
+      "items": [
+        {
+          "id": "tj-1",
+          "name": "Organic Whole Milk (Gallon)",
+          "quantity": 1,
+          "unitPrice": 4.49,
+          "totalPrice": 4.49,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-2",
+          "name": "Organic Bananas (Bunch)",
+          "quantity": 1,
+          "unitPrice": 1.99,
+          "totalPrice": 1.99,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-3",
+          "name": "Avocados Bag (4ct)",
+          "quantity": 4,
+          "unitPrice": 1.25,
+          "totalPrice": 5,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-4",
+          "name": "Sourdough Bread Loaf",
+          "quantity": 1,
+          "unitPrice": 3.99,
+          "totalPrice": 3.99,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-5",
+          "name": "Cold Brew Coffee Concentrate",
+          "quantity": 2,
+          "unitPrice": 7.99,
+          "totalPrice": 15.98,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-6",
+          "name": "Greek Honey Yogurt (32oz)",
+          "quantity": 1,
+          "unitPrice": 5.49,
+          "totalPrice": 5.49,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-7",
+          "name": "Dark Chocolate Peanut Butter Cups",
+          "quantity": 2,
+          "unitPrice": 4.49,
+          "totalPrice": 8.98,
+          "isTaxable": true
+        },
+        {
+          "id": "tj-8",
+          "name": "Citrus Scent Dish Soap",
+          "quantity": 1,
+          "unitPrice": 3.99,
+          "totalPrice": 3.99,
+          "isTaxable": true
+        },
+        {
+          "id": "tj-9",
+          "name": "Recycled Paper Towels (2pk)",
+          "quantity": 1,
+          "unitPrice": 4.99,
+          "totalPrice": 4.99,
+          "isTaxable": true
+        }
+      ],
+      "taxTotal": 1.6,
+      "basketDiscount": 0,
+      "receiptImages": [],
+      "claims": {
+        "tj-1": {
+          "p1": 1,
+          "p2": 1
+        },
+        "tj-2": {
+          "p1": 1,
+          "p2": 1,
+          "p3": 1,
+          "p4": 1
+        }
+      },
+      "readyParticipantIds": [
+        "p2",
+        "p3",
+        "p4"
+      ],
+      "status": "settled",
+      "createdAt": "2026-08-29T22:04:24.082Z"
+    },
+    {
+      "id": "trip-1788041059642",
+      "householdId": "household-default",
+      "storeName": "Trader Joe's",
+      "date": "2026-08-29",
+      "payerId": "p1",
+      "items": [
+        {
+          "id": "tj-1",
+          "name": "Organic Whole Milk (Gallon)",
+          "quantity": 1,
+          "unitPrice": 4.49,
+          "totalPrice": 4.49,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-2",
+          "name": "Organic Bananas (Bunch)",
+          "quantity": 1,
+          "unitPrice": 1.99,
+          "totalPrice": 1.99,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-3",
+          "name": "Avocados Bag (4ct)",
+          "quantity": 4,
+          "unitPrice": 1.25,
+          "totalPrice": 5,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-4",
+          "name": "Sourdough Bread Loaf",
+          "quantity": 1,
+          "unitPrice": 3.99,
+          "totalPrice": 3.99,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-5",
+          "name": "Cold Brew Coffee Concentrate",
+          "quantity": 2,
+          "unitPrice": 7.99,
+          "totalPrice": 15.98,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-6",
+          "name": "Greek Honey Yogurt (32oz)",
+          "quantity": 1,
+          "unitPrice": 5.49,
+          "totalPrice": 5.49,
+          "isTaxable": false
+        },
+        {
+          "id": "tj-7",
+          "name": "Dark Chocolate Peanut Butter Cups",
+          "quantity": 2,
+          "unitPrice": 4.49,
+          "totalPrice": 8.98,
+          "isTaxable": true
+        },
+        {
+          "id": "tj-8",
+          "name": "Citrus Scent Dish Soap",
+          "quantity": 1,
+          "unitPrice": 3.99,
+          "totalPrice": 3.99,
+          "isTaxable": true
+        },
+        {
+          "id": "tj-9",
+          "name": "Recycled Paper Towels (2pk)",
+          "quantity": 1,
+          "unitPrice": 4.99,
+          "totalPrice": 4.99,
+          "isTaxable": true
+        }
+      ],
+      "taxTotal": 1.6,
+      "basketDiscount": 0,
+      "receiptImages": [],
+      "claims": {
+        "tj-1": {
+          "p1": 1,
+          "p2": 1
+        },
+        "tj-2": {
+          "p1": 1,
+          "p2": 1,
+          "p3": 1,
+          "p4": 1
+        }
+      },
+      "readyParticipantIds": [
+        "p2",
+        "p3",
+        "p4"
+      ],
+      "status": "settled",
+      "createdAt": "2026-08-29T22:04:19.642Z"
+    }
+  ]
+}

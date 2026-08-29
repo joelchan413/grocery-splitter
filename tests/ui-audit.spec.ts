@@ -51,6 +51,12 @@ test.describe('GrocerySplit Complete User Flow and UI Audit', () => {
     await expect(page.getByText(/Select Who is Claiming/i)).toBeVisible();
     await expect(page.getByText(/Roommate Progress/i)).toBeVisible();
 
+    // Verify Share Live Modal
+    await page.getByRole('button', { name: /Share Live/i }).click();
+    await expect(page.getByRole('heading', { name: /Share Live Trip/i })).toBeVisible();
+    await expect(page.getByText(/Room Link/i)).toBeVisible();
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+
     // Joel (Active by default) claims first item
     await page.getByRole('button', { name: /^Claim$/i }).first().click();
     await expect(page.getByRole('button', { name: /^Mine$/i }).first()).toBeVisible();

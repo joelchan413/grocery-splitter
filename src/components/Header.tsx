@@ -1,25 +1,29 @@
 'use client';
 
 import React from 'react';
-import { ShoppingBag, Users, History, PlusCircle, Settings } from 'lucide-react';
+import { ShoppingBag, Users, History, PlusCircle, Settings, QrCode, Radio } from 'lucide-react';
 import { Household } from '@/types';
 
 interface HeaderProps {
   household: Household;
   activeView: 'scanner' | 'review' | 'claiming' | 'settlement' | 'history';
+  hasActiveTrip?: boolean;
   onNewTrip: () => void;
   onOpenHistory: () => void;
   onOpenHousehold: () => void;
   onOpenSettings: () => void;
+  onOpenShare?: () => void;
 }
 
 export function Header({
   household,
   activeView,
+  hasActiveTrip = false,
   onNewTrip,
   onOpenHistory,
   onOpenHousehold,
   onOpenSettings,
+  onOpenShare,
 }: HeaderProps) {
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95">
@@ -38,7 +42,7 @@ export function Header({
             </div>
             <button
               onClick={onOpenHousehold}
-              className="group flex items-center gap-1 text-xs text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400"
+              className="group flex items-center gap-1 text-xs text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400 cursor-pointer"
             >
               <Users className="h-3 w-3" />
               <span>{household.name}</span>
@@ -49,6 +53,18 @@ export function Header({
 
         {/* Navigation & Actions */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {hasActiveTrip && onOpenShare && (
+            <button
+              onClick={onOpenShare}
+              className="flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-800 shadow-2xs hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 transition-all cursor-pointer"
+              title="Share live room with roommates"
+            >
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
+              <QrCode className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Share Live</span>
+            </button>
+          )}
+
           <button
             onClick={onOpenHistory}
             className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all cursor-pointer ${

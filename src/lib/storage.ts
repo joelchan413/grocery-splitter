@@ -17,8 +17,26 @@ const STORAGE_KEYS = {
   ACTIVE_TRIP: 'grocery_splitter_active_trip_v1',
   TRIP_HISTORY: 'grocery_splitter_trip_history_v1',
   GEMINI_API_KEY: 'grocery_splitter_gemini_key_v1',
+  AI_MODEL: 'grocery_splitter_ai_model_v1',
   ACTIVE_PARTICIPANT_ID: 'grocery_splitter_active_participant_v1',
 };
+
+export const AVAILABLE_MODELS = [
+  { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', desc: 'Latest, fastest & highest OCR accuracy', isDefault: true },
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', desc: 'High performance multimodal model' },
+  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', desc: 'Fast low-latency inference' },
+  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', desc: 'Standard legacy flash model' },
+] as const;
+
+export function loadSelectedAiModel(): string {
+  if (typeof window === 'undefined') return 'gemini-3.7-flash';
+  return localStorage.getItem(STORAGE_KEYS.AI_MODEL) || 'gemini-3.7-flash';
+}
+
+export function saveSelectedAiModel(model: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(STORAGE_KEYS.AI_MODEL, model);
+}
 
 export function isHouseholdInitialized(): boolean {
   if (typeof window === 'undefined') return true;

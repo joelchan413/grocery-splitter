@@ -4,7 +4,7 @@ import { parseReceiptImages } from '@/lib/gemini';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { images, apiKey } = body;
+    const { images, apiKey, model } = body;
 
     if (!images || !Array.isArray(images) || images.length === 0) {
       return NextResponse.json(
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const parsedData = await parseReceiptImages(images, apiKey);
+    const parsedData = await parseReceiptImages(images, apiKey, model);
     return NextResponse.json(parsedData);
   } catch (error: any) {
     console.error('Error scanning receipt:', error);

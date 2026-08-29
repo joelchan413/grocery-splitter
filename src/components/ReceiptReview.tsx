@@ -26,7 +26,9 @@ export function ReceiptReview({
   const [taxTotal, setTaxTotal] = useState<number>(trip.taxTotal);
   const [basketDiscount, setBasketDiscount] = useState<number>(trip.basketDiscount);
 
-  const payer = household.participants.find((p) => p.id === trip.payerId) || household.participants[0];
+  const [payerId, setPayerId] = useState<string>(trip.payerId);
+
+  const selectedPayer = household.participants.find((p) => p.id === payerId) || household.participants[0];
 
   const handleUpdateItem = (id: string, updates: Partial<LineItem>) => {
     setItems((prev) =>
@@ -73,6 +75,7 @@ export function ReceiptReview({
       ...trip,
       storeName: storeName.trim() || 'Grocery Store',
       date,
+      payerId,
       items,
       taxTotal,
       basketDiscount,
@@ -90,7 +93,7 @@ export function ReceiptReview({
         <div>
           <button
             onClick={onBackToScanner}
-            className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 mb-1"
+            className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 mb-1 cursor-pointer"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back to Scanner
           </button>
@@ -137,12 +140,21 @@ export function ReceiptReview({
         </div>
         <div>
           <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-            Payer (Card Holder)
+            Payer (Who Paid)
           </label>
-          <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
-            <span>{payer.avatarEmoji}</span>
-            <span>{payer.name}</span>
-            <span className="text-xs text-slate-400 font-normal">({payer.venmoHandle})</span>
+          <div className="relative">
+            <select
+              aria-label="Payer selection"
+              value={payerId}
+              onChange={(e) => setPayerId(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+            >
+              {household.participants.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.avatarEmoji} {p.name} {p.venmoHandle ? `(${p.venmoHandle})` : ''}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>

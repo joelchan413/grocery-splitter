@@ -58,7 +58,8 @@ export const SAMPLE_RECEIPTS: { id: string; label: string; data: ParsedReceiptDa
  */
 export async function parseReceiptImages(
   imageBase64List: string[],
-  customApiKey?: string
+  customApiKey?: string,
+  selectedModel?: string
 ): Promise<ParsedReceiptData> {
   const apiKey = customApiKey || process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
@@ -114,8 +115,10 @@ Return valid JSON adhering strictly to this schema:
     },
   ];
 
+  const modelName = selectedModel || 'gemini-3.7-flash';
+
   const response = await ai.models.generateContent({
-    model: 'gemini-3.7-flash',
+    model: modelName,
     contents: contents as any,
     config: {
       responseMimeType: 'application/json',

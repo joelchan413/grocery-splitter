@@ -25,10 +25,11 @@ test.describe('GrocerySplit Complete User Flow and UI Audit', () => {
     await expect(page.getByText('Household Setup')).toBeVisible();
     await page.getByRole('button', { name: /Cancel/i }).click();
 
-    // Verify Settings Modal
+    // Verify Settings Modal & AI Model Selector
     await page.getByLabel('Settings').click();
-    await expect(page.getByText('Settings')).toBeVisible();
-    await expect(page.getByText(/Recommended: Environment File/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+    await expect(page.getByText(/AI Extraction Model/i)).toBeVisible();
+    await expect(page.getByText(/Gemini 3.7 Flash/i)).toBeVisible();
     await page.getByRole('button', { name: /Close/i }).click();
 
     // 2. Select Sample Trader Joe's Receipt

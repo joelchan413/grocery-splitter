@@ -35,6 +35,14 @@ You can add your Google Gemini API key:
   ```
 *(You can also test all features immediately without an API key using the built-in sample receipts!)*
 
+### 🐳 Run with Docker
+You can build and run the production container with Docker Compose:
+
+```bash
+docker compose up --build
+```
+The app will be accessible at [http://localhost:3000](http://localhost:3000).
+
 ## 📐 Architecture & Domain Rules
 
 - [CONTEXT.md](./CONTEXT.md) — Canonical domain glossary and vocabulary.

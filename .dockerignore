@@ -1,0 +1,29 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Testing & Playwright
+coverage
+test-results
+playwright-report
+screenshots
+
+# Next.js build output
+.next
+out
+build
+
+# Version Control
+.git
+.gitignore
+
+# Environment secrets
+.env*.local
+
+# Logs & System files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+*.pem

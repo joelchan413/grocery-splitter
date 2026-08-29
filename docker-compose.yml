@@ -1,0 +1,15 @@
+services:
+  grocery-splitter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: grocery-splitter
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    env_file:
+      - path: .env.local
+        required: false

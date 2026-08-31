@@ -28,9 +28,9 @@ export function TripHistory({
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back
           </button>
-          <h1 className="text-2xl font-black text-slate-900 dark:text-white">Trip History Archive</h1>
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white">Trip History</h1>
           <p className="text-xs text-slate-500">
-            View past grocery shopping runs and their settlement breakdowns.
+            View all scanned grocery runs, active claiming sessions, and settlements.
           </p>
         </div>
       </div>
@@ -40,9 +40,9 @@ export function TripHistory({
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500 mb-3">
             <ShoppingBag className="h-7 w-7" />
           </div>
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white">No Archived Trips Yet</h3>
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white">No Scanned Trips Yet</h3>
           <p className="mt-1 text-xs text-slate-500">
-            Once you scan receipts and finish trips, they will appear here.
+            Once you scan or upload receipts, they will appear here immediately.
           </p>
         </div>
       ) : (
@@ -64,9 +64,24 @@ export function TripHistory({
                     {payer.avatarEmoji}
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 transition-colors">
-                      {trip.storeName || 'Grocery Store'}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 transition-colors">
+                        {trip.storeName || 'Grocery Store'}
+                      </h3>
+                      {trip.status === 'settled' ? (
+                        <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                          Settled
+                        </span>
+                      ) : trip.status === 'review' ? (
+                        <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                          In Review
+                        </span>
+                      ) : (
+                        <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                          Claiming Active
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
                       <span className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" /> {trip.date}

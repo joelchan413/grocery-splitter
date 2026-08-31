@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Plus, Trash2, CheckCircle2, DollarSign, Tag, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, DollarSign, Tag, ArrowRight, ArrowLeft, ChevronDown } from 'lucide-react';
 import { Trip, LineItem, Household } from '@/types';
 import { round2 } from '@/lib/calculations';
 
@@ -9,7 +9,7 @@ interface ReceiptReviewProps {
   trip: Trip;
   household: Household;
   onUpdateTrip: (updated: Trip) => void;
-  onConfirmAndProceed: () => void;
+  onConfirmAndProceed: (updatedTrip: Trip) => void;
   onBackToScanner: () => void;
 }
 
@@ -83,7 +83,7 @@ export function ReceiptReview({
     };
 
     onUpdateTrip(updatedTrip);
-    onConfirmAndProceed();
+    onConfirmAndProceed(updatedTrip);
   };
 
   return (
@@ -117,29 +117,29 @@ export function ReceiptReview({
       {/* Store Metadata Card */}
       <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div>
-          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
             Store Name
           </label>
           <input
             type="text"
             value={storeName}
             onChange={(e) => setStoreName(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:bg-slate-800 dark:focus:border-emerald-500"
           />
         </div>
         <div>
-          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
             Purchase Date
           </label>
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:bg-slate-800 dark:focus:border-emerald-500 dark:[color-scheme:dark]"
           />
         </div>
         <div>
-          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
             Payer (Who Paid)
           </label>
           <div className="relative">
@@ -147,14 +147,15 @@ export function ReceiptReview({
               aria-label="Payer selection"
               value={payerId}
               onChange={(e) => setPayerId(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+              className="w-full appearance-none rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 pr-9 text-sm font-bold text-slate-900 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:bg-slate-800 dark:focus:border-emerald-500 cursor-pointer"
             >
               {household.participants.map((p) => (
-                <option key={p.id} value={p.id}>
+                <option key={p.id} value={p.id} className="bg-white text-slate-900 dark:bg-slate-800 dark:text-slate-100 py-1">
                   {p.avatarEmoji} {p.name} {p.venmoHandle ? `(${p.venmoHandle})` : ''}
                 </option>
               ))}
             </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           </div>
         </div>
       </div>

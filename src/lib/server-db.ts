@@ -118,8 +118,17 @@ export function saveTrip(trip: Trip): Trip {
   const db = getDatabase();
   db.trips[trip.id] = trip;
   db.activeTripId = trip.id;
+  
+  const histIdx = db.history.findIndex((t) => t.id === trip.id);
+  if (histIdx >= 0) {
+    db.history[histIdx] = trip;
+  } else {
+    db.history.unshift(trip);
+  }
+
   saveDatabase(db);
   tripEvents.emit(`trip-updated:${trip.id}`, trip);
+  tripEvents.emit('history-updated', db.history);
   return trip;
 }
 
@@ -134,8 +143,17 @@ export function updateTripPartial(tripId: string, updates: Partial<Trip>): Trip 
   };
 
   db.trips[tripId] = updated;
+  
+  const histIdx = db.history.findIndex((t) => t.id === tripId);
+  if (histIdx >= 0) {
+    db.history[histIdx] = updated;
+  } else {
+    db.history.unshift(updated);
+  }
+
   saveDatabase(db);
   tripEvents.emit(`trip-updated:${tripId}`, updated);
+  tripEvents.emit('history-updated', db.history);
   return updated;
 }
 
@@ -145,7 +163,10 @@ export function archiveTrip(tripId: string): Trip | null {
   if (!trip) return null;
 
   trip.status = 'settled';
-  if (!db.history.some((t) => t.id === tripId)) {
+  const histIdx = db.history.findIndex((t) => t.id === tripId);
+  if (histIdx >= 0) {
+    db.history[histIdx] = trip;
+  } else {
     db.history.unshift(trip);
   }
 

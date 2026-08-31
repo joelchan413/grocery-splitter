@@ -111,7 +111,16 @@ export function loadTripHistory(): Trip[] {
   }
 }
 
-export function archiveTrip(trip: Trip): void {
+export function saveTripHistory(history: Trip[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEYS.TRIP_HISTORY, JSON.stringify(history));
+  } catch (e) {
+    console.error('Error saving trip history:', e);
+  }
+}
+
+export function addOrUpdateTripHistory(trip: Trip): void {
   if (typeof window === 'undefined') return;
   try {
     const history = loadTripHistory();
@@ -121,10 +130,14 @@ export function archiveTrip(trip: Trip): void {
     } else {
       history.unshift(trip);
     }
-    localStorage.setItem(STORAGE_KEYS.TRIP_HISTORY, JSON.stringify(history));
+    saveTripHistory(history);
   } catch (e) {
-    console.error('Error archiving trip:', e);
+    console.error('Error updating trip history:', e);
   }
+}
+
+export function archiveTrip(trip: Trip): void {
+  addOrUpdateTripHistory({ ...trip, status: 'settled' });
 }
 
 export function loadGeminiApiKey(): string {

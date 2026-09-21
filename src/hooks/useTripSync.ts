@@ -63,11 +63,19 @@ export function useTripSync({ trip, onTripUpdated }: UseTripSyncProps) {
   const broadcastTripUpdate = useCallback(async (updated: Trip) => {
     onTripUpdated(updated); // Instant optimistic update
     try {
-      await fetch(`/api/trips/${encodeURIComponent(updated.id)}`, {
+      const res = await fetch(`/api/trips/${encodeURIComponent(updated.id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       });
+      if (res.ok) {
+        const serverTrip: Trip = await res.json();
+        if (serverTrip && serverTrip.id === tripIdRef.current) {
+          onTripUpdated(serverTrip);
+        }
+      } else {
+        console.warn('Server returned non-ok status for trip PATCH:', res.status);
+      }
     } catch (err) {
       console.error('Failed to sync trip update with server:', err);
     }

@@ -42,6 +42,7 @@ export interface Trip {
   readyParticipantIds: string[];
   status: 'review' | 'claiming' | 'settled';
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface ParticipantSettlement {

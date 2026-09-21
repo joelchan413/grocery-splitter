@@ -82,7 +82,6 @@ export function ReceiptReview({
       status: 'claiming',
     };
 
-    onUpdateTrip(updatedTrip);
     onConfirmAndProceed(updatedTrip);
   };
 

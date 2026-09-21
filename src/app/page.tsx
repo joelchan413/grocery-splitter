@@ -45,15 +45,24 @@ export default function Home() {
   const [isHydrated, setIsHydrated] = useState(false);
 
   // Callback when server-side SSE sends an updated trip
-  const handleTripUpdatedFromServer = useCallback((updated: Trip) => {
+  const handleTripUpdatedFromServer = useCallback((serverTrip: Trip) => {
     setActiveTrip((prev) => {
-      if (prev?.id === updated.id) {
-        saveActiveTrip(updated);
-        addOrUpdateTripHistory(updated);
-        setTripHistory(loadTripHistory());
-        return updated;
+      if (!prev || prev.id !== serverTrip.id) {
+        return prev;
       }
-      return prev;
+      // If local state has a newer timestamp than the incoming server packet,
+      // protect local optimistic claims from being overwritten by stale server packets.
+      if (prev.updatedAt && serverTrip.updatedAt) {
+        const localTime = new Date(prev.updatedAt).getTime();
+        const serverTime = new Date(serverTrip.updatedAt).getTime();
+        if (localTime > serverTime) {
+          return prev;
+        }
+      }
+      saveActiveTrip(serverTrip);
+      addOrUpdateTripHistory(serverTrip);
+      setTripHistory(loadTripHistory());
+      return serverTrip;
     });
   }, []);
 
@@ -102,6 +111,15 @@ export default function Home() {
           console.error('Error joining shared trip:', e);
         }
       } else if (savedTrip) {
+        // Ensure server has this active trip registered
+        try {
+          fetch('/api/trips', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(savedTrip),
+          }).catch(() => {});
+        } catch {}
+
         if (savedTrip.status === 'review') {
           setView('review');
         } else if (savedTrip.status === 'settled') {
@@ -162,11 +180,15 @@ export default function Home() {
 
   // Update trip locally and broadcast to connected roommates
   const handleUpdateTrip = (updated: Trip) => {
-    setActiveTrip(updated);
-    saveActiveTrip(updated);
-    addOrUpdateTripHistory(updated);
+    const tripWithTimestamp: Trip = {
+      ...updated,
+      updatedAt: new Date().toISOString(),
+    };
+    setActiveTrip(tripWithTimestamp);
+    saveActiveTrip(tripWithTimestamp);
+    addOrUpdateTripHistory(tripWithTimestamp);
     setTripHistory(loadTripHistory());
-    broadcastTripUpdate(updated);
+    broadcastTripUpdate(tripWithTimestamp);
   };
 
   const handleSelectParticipant = (id: string) => {

@@ -3,10 +3,18 @@ import * as path from 'path';
 import { EventEmitter } from 'events';
 import { Household, Trip } from '@/types';
 
-// Global Event Emitter for broadcasting real-time updates across SSE connections
+// Global Event Emitter and in-memory DB attached to globalThis to persist across Next.js route bundles
+const globalForDb = globalThis as unknown as {
+  memoryDb?: DatabaseSchema;
+  tripEvents?: EventEmitter;
+};
+
 class TripEventEmitter extends EventEmitter {}
-export const tripEvents = new TripEventEmitter();
+export const tripEvents = globalForDb.tripEvents || new TripEventEmitter();
 tripEvents.setMaxListeners(100);
+if (!globalForDb.tripEvents) {
+  globalForDb.tripEvents = tripEvents;
+}
 
 export interface DatabaseSchema {
   household: Household;
@@ -29,9 +37,6 @@ const DEFAULT_HOUSEHOLD: Household = {
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'database.json');
 
-// In-memory cache for fast read/write
-let memoryDb: DatabaseSchema | null = null;
-
 function ensureDataDir(): void {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -39,7 +44,7 @@ function ensureDataDir(): void {
 }
 
 export function getDatabase(): DatabaseSchema {
-  if (memoryDb) return memoryDb;
+  if (globalForDb.memoryDb) return globalForDb.memoryDb;
 
   ensureDataDir();
 
@@ -51,14 +56,14 @@ export function getDatabase(): DatabaseSchema {
       history: [],
     };
     saveDatabase(initial);
-    memoryDb = initial;
-    return memoryDb;
+    globalForDb.memoryDb = initial;
+    return globalForDb.memoryDb;
   }
 
   try {
     const raw = fs.readFileSync(DB_FILE, 'utf-8');
-    memoryDb = JSON.parse(raw);
-    return memoryDb!;
+    globalForDb.memoryDb = JSON.parse(raw);
+    return globalForDb.memoryDb!;
   } catch (err) {
     console.error('Error reading database file, resetting to default:', err);
     const fallback: DatabaseSchema = {
@@ -68,18 +73,24 @@ export function getDatabase(): DatabaseSchema {
       history: [],
     };
     saveDatabase(fallback);
-    memoryDb = fallback;
-    return memoryDb;
+    globalForDb.memoryDb = fallback;
+    return globalForDb.memoryDb;
   }
 }
 
 export function saveDatabase(data: DatabaseSchema): void {
-  memoryDb = data;
+  globalForDb.memoryDb = data;
   ensureDataDir();
   const tempFile = `${DB_FILE}.tmp.${Date.now()}`;
   try {
     fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf-8');
-    fs.renameSync(tempFile, DB_FILE);
+    try {
+      fs.renameSync(tempFile, DB_FILE);
+    } catch {
+      // Fallback if atomic rename fails (e.g. cross-device mount in Docker or Windows file lock)
+      fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
+      if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+    }
   } catch (err) {
     console.error('Error writing database file:', err);
     try {
@@ -116,33 +127,44 @@ export function getActiveTrip(): Trip | null {
 
 export function saveTrip(trip: Trip): Trip {
   const db = getDatabase();
-  db.trips[trip.id] = trip;
-  db.activeTripId = trip.id;
+  const tripToSave: Trip = {
+    ...trip,
+    updatedAt: trip.updatedAt || new Date().toISOString(),
+  };
+  db.trips[tripToSave.id] = tripToSave;
+  db.activeTripId = tripToSave.id;
   
-  const histIdx = db.history.findIndex((t) => t.id === trip.id);
+  const histIdx = db.history.findIndex((t) => t.id === tripToSave.id);
   if (histIdx >= 0) {
-    db.history[histIdx] = trip;
+    db.history[histIdx] = tripToSave;
   } else {
-    db.history.unshift(trip);
+    db.history.unshift(tripToSave);
   }
 
   saveDatabase(db);
-  tripEvents.emit(`trip-updated:${trip.id}`, trip);
+  tripEvents.emit(`trip-updated:${tripToSave.id}`, tripToSave);
   tripEvents.emit('history-updated', db.history);
-  return trip;
+  return tripToSave;
 }
 
 export function updateTripPartial(tripId: string, updates: Partial<Trip>): Trip | null {
   const db = getDatabase();
   const existing = db.trips[tripId];
-  if (!existing) return null;
 
-  const updated: Trip = {
-    ...existing,
-    ...updates,
-  };
+  // If trip does not exist on server, but updates provides a valid trip object, upsert it!
+  const updated: Trip = existing
+    ? {
+        ...existing,
+        ...updates,
+      }
+    : (updates as Trip);
+
+  if (!updated || !updated.id) return null;
+
+  updated.updatedAt = new Date().toISOString();
 
   db.trips[tripId] = updated;
+  db.activeTripId = tripId;
   
   const histIdx = db.history.findIndex((t) => t.id === tripId);
   if (histIdx >= 0) {

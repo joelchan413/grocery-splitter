@@ -97,3 +97,16 @@ test('a successful update survives a fresh process', () => {
   boot(files).updateHousehold({ id: 'h', name: 'Updated', participants: [] });
   assert.equal(boot(files).getHousehold().name, 'Updated');
 });
+
+test('new and patched trips remain in shared history after restart', () => {
+  const files = new Map([['/app/data/database.json', JSON.stringify(storedDatabase())]]);
+  const db = boot(files);
+  db.saveTrip({ id: 't1', status: 'claiming', storeName: 'First' });
+  db.updateTripPartial('t2', { id: 't2', status: 'claiming', storeName: 'Second' });
+
+  const restarted = boot(files);
+  assert.equal(restarted.getDatabase().activeTripId, 't2');
+  assert.deepEqual(Array.from(restarted.getTripHistory(), (trip) => trip.id), ['t2', 't1']);
+  assert.equal(restarted.getTrip('t1').storeName, 'First');
+  assert.equal(restarted.getTrip('t2').storeName, 'Second');
+});

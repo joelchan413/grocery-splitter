@@ -58,6 +58,10 @@ export function useTripSync({ trip, onTripUpdated, onSyncError }: UseTripSyncPro
         body: JSON.stringify(updated),
       });
       if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      const serverTrip: Trip = await response.json();
+      if (serverTrip && serverTrip.id === tripIdRef.current) {
+        onTripUpdated(serverTrip);
+      }
       onSyncError(null);
     } catch (err) {
       console.error('Failed to sync trip update with server:', err);

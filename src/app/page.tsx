@@ -7,6 +7,8 @@ import {
   loadActiveTrip,
   saveActiveTrip,
   loadTripHistory,
+  saveTripHistory,
+  addOrUpdateTripHistory,
   archiveTrip,
   loadActiveParticipantId,
   saveActiveParticipantId,
@@ -44,14 +46,24 @@ export default function Home() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   // Callback when server-side SSE sends an updated trip
-  const handleTripUpdatedFromServer = useCallback((updated: Trip) => {
+  const handleTripUpdatedFromServer = useCallback((serverTrip: Trip) => {
     setActiveTrip((prev) => {
-      // Prevent stale overwrite if user already moved to settlement
-      if (prev?.id === updated.id) {
-        saveActiveTrip(updated);
-        return updated;
+      if (!prev || prev.id !== serverTrip.id) {
+        return prev;
       }
-      return prev;
+      // If local state has a newer timestamp than the incoming server packet,
+      // protect local optimistic claims from being overwritten by stale server packets.
+      if (prev.updatedAt && serverTrip.updatedAt) {
+        const localTime = new Date(prev.updatedAt).getTime();
+        const serverTime = new Date(serverTrip.updatedAt).getTime();
+        if (localTime > serverTime) {
+          return prev;
+        }
+      }
+      saveActiveTrip(serverTrip);
+      addOrUpdateTripHistory(serverTrip);
+      setTripHistory(loadTripHistory());
+      return serverTrip;
     });
   }, []);
 
@@ -88,6 +100,8 @@ export default function Home() {
             const serverTrip: Trip = await res.json();
             setActiveTrip(serverTrip);
             saveActiveTrip(serverTrip);
+            addOrUpdateTripHistory(serverTrip);
+            setTripHistory(loadTripHistory());
             setView(serverTrip.status === 'review' ? 'review' : serverTrip.status === 'settled' ? 'settlement' : 'claiming');
 
             // Prompt roommate identification if first time on this device
@@ -99,6 +113,15 @@ export default function Home() {
           console.error('Error joining shared trip:', e);
         }
       } else if (savedTrip) {
+        // Ensure server has this active trip registered
+        try {
+          fetch('/api/trips', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(savedTrip),
+          }).catch(() => {});
+        } catch {}
+
         if (savedTrip.status === 'review') {
           setView('review');
         } else if (savedTrip.status === 'settled') {
@@ -113,13 +136,23 @@ export default function Home() {
         setIsFirstTimeSetup(true);
       }
 
-      // Sync latest household from server
+      // Sync latest household and history from server
       try {
-        const hhRes = await fetch('/api/household');
+        const [hhRes, histRes] = await Promise.all([
+          fetch('/api/household'),
+          fetch('/api/trips?view=history'),
+        ]);
         if (hhRes.ok) {
           const serverHousehold: Household = await hhRes.json();
           setHousehold(serverHousehold);
           saveHousehold(serverHousehold);
+        }
+        if (histRes.ok) {
+          const serverHistory: Trip[] = await histRes.json();
+          if (Array.isArray(serverHistory) && serverHistory.length > 0) {
+            setTripHistory(serverHistory);
+            saveTripHistory(serverHistory);
+          }
         }
       } catch {}
 
@@ -152,9 +185,15 @@ export default function Home() {
 
   // Update trip locally and broadcast to connected roommates
   const handleUpdateTrip = (updated: Trip) => {
-    setActiveTrip(updated);
-    saveActiveTrip(updated);
-    broadcastTripUpdate(updated);
+    const tripWithTimestamp: Trip = {
+      ...updated,
+      updatedAt: new Date().toISOString(),
+    };
+    setActiveTrip(tripWithTimestamp);
+    saveActiveTrip(tripWithTimestamp);
+    addOrUpdateTripHistory(tripWithTimestamp);
+    setTripHistory(loadTripHistory());
+    broadcastTripUpdate(tripWithTimestamp);
   };
 
   const handleSelectParticipant = (id: string) => {
@@ -179,6 +218,8 @@ export default function Home() {
   const handleTripScanned = async (newTrip: Trip) => {
     setActiveTrip(newTrip);
     saveActiveTrip(newTrip);
+    addOrUpdateTripHistory(newTrip);
+    setTripHistory(loadTripHistory());
     setView('review');
 
     // Save to server database immediately
@@ -196,10 +237,10 @@ export default function Home() {
     }
   };
 
-  const handleConfirmReview = () => {
-    if (!activeTrip) return;
-    const updated = { ...activeTrip, status: 'claiming' as const };
-    handleUpdateTrip(updated);
+  const handleConfirmReview = (updated?: Trip) => {
+    if (updated) {
+      handleUpdateTrip(updated);
+    }
     setView('claiming');
   };
 
@@ -303,11 +344,23 @@ export default function Home() {
             onSelectTrip={(selected) => {
               setActiveTrip(selected);
               saveActiveTrip(selected);
-              setView('settlement');
+              if (selected.status === 'review') {
+                setView('review');
+              } else if (selected.status === 'settled') {
+                setView('settlement');
+              } else {
+                setView('claiming');
+              }
             }}
             onBackToActive={() => {
               if (activeTrip) {
-                setView(activeTrip.status === 'review' ? 'review' : 'claiming');
+                setView(
+                  activeTrip.status === 'review'
+                    ? 'review'
+                    : activeTrip.status === 'settled'
+                    ? 'settlement'
+                    : 'claiming'
+                );
               } else {
                 setView('scanner');
               }

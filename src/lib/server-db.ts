@@ -3,10 +3,18 @@ import * as path from 'path';
 import { EventEmitter } from 'events';
 import { Household, Trip } from '@/types';
 
-// Global Event Emitter for broadcasting real-time updates across SSE connections
+// Global Event Emitter and in-memory DB attached to globalThis to persist across Next.js route bundles
+const globalForDb = globalThis as unknown as {
+  memoryDb?: DatabaseSchema;
+  tripEvents?: EventEmitter;
+};
+
 class TripEventEmitter extends EventEmitter {}
-export const tripEvents = new TripEventEmitter();
+export const tripEvents = globalForDb.tripEvents || new TripEventEmitter();
 tripEvents.setMaxListeners(100);
+if (!globalForDb.tripEvents) {
+  globalForDb.tripEvents = tripEvents;
+}
 
 export interface DatabaseSchema {
   household: Household;
@@ -29,9 +37,6 @@ const DEFAULT_HOUSEHOLD: Household = {
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'database.json');
 
-// In-memory cache for fast read/write
-let memoryDb: DatabaseSchema | null = null;
-
 function ensureDataDir(): void {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -39,7 +44,7 @@ function ensureDataDir(): void {
 }
 
 export function getDatabase(): DatabaseSchema {
-  if (memoryDb) return memoryDb;
+  if (globalForDb.memoryDb) return globalForDb.memoryDb;
 
   ensureDataDir();
 
@@ -56,8 +61,8 @@ export function getDatabase(): DatabaseSchema {
 
   try {
     const raw = fs.readFileSync(DB_FILE, 'utf-8');
-    memoryDb = JSON.parse(raw);
-    return memoryDb!;
+    globalForDb.memoryDb = JSON.parse(raw);
+    return globalForDb.memoryDb!;
   } catch (err) {
     console.error('Error reading database file:', err);
     throw err;
@@ -70,7 +75,7 @@ export function saveDatabase(data: DatabaseSchema): void {
   try {
     fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf-8');
     fs.renameSync(tempFile, DB_FILE);
-    memoryDb = data;
+    globalForDb.memoryDb = data;
   } catch (err) {
     console.error('Error writing database file:', err);
     try {
@@ -105,29 +110,52 @@ export function getActiveTrip(): Trip | null {
   return db.trips[db.activeTripId] || null;
 }
 
+function upsertHistory(history: Trip[], trip: Trip): Trip[] {
+  const index = history.findIndex((item) => item.id === trip.id);
+  if (index === -1) return [trip, ...history];
+  return history.map((item, itemIndex) => itemIndex === index ? trip : item);
+}
+
 export function saveTrip(trip: Trip): Trip {
   const db = getDatabase();
+  const tripToSave: Trip = {
+    ...trip,
+    updatedAt: trip.updatedAt || new Date().toISOString(),
+  };
+  const history = upsertHistory(db.history, tripToSave);
   saveDatabase({
     ...db,
-    trips: { ...db.trips, [trip.id]: trip },
-    activeTripId: trip.id,
+    trips: { ...db.trips, [tripToSave.id]: tripToSave },
+    activeTripId: tripToSave.id,
+    history,
   });
-  tripEvents.emit(`trip-updated:${trip.id}`, trip);
-  return trip;
+  tripEvents.emit(`trip-updated:${tripToSave.id}`, tripToSave);
+  tripEvents.emit('history-updated', history);
+  return tripToSave;
 }
 
 export function updateTripPartial(tripId: string, updates: Partial<Trip>): Trip | null {
   const db = getDatabase();
   const existing = db.trips[tripId];
-  if (!existing) return null;
 
+  // If trip does not exist on server, but updates provides a valid trip object, upsert it!
   const updated: Trip = {
-    ...existing,
+    ...(existing || (updates as Trip)),
     ...updates,
+    updatedAt: new Date().toISOString(),
   };
 
-  saveDatabase({ ...db, trips: { ...db.trips, [tripId]: updated } });
+  if (!updated || !updated.id) return null;
+
+  const history = upsertHistory(db.history, updated);
+  saveDatabase({
+    ...db,
+    trips: { ...db.trips, [tripId]: updated },
+    activeTripId: tripId,
+    history,
+  });
   tripEvents.emit(`trip-updated:${tripId}`, updated);
+  tripEvents.emit('history-updated', history);
   return updated;
 }
 
@@ -137,9 +165,7 @@ export function archiveTrip(tripId: string): Trip | null {
   if (!trip) return null;
 
   const archived = { ...trip, status: 'settled' as const };
-  const history = db.history.some((t) => t.id === tripId)
-    ? db.history.map((t) => t.id === tripId ? archived : t)
-    : [archived, ...db.history];
+  const history = upsertHistory(db.history, archived);
 
   saveDatabase({
     ...db,

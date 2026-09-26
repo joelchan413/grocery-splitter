@@ -18,6 +18,9 @@ build
 .git
 .gitignore
 
+# Live database is mounted at runtime, never baked into an image
+data
+
 # Environment secrets
 .env*.local
 

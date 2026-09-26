@@ -51,8 +51,7 @@ export function getDatabase(): DatabaseSchema {
       history: [],
     };
     saveDatabase(initial);
-    memoryDb = initial;
-    return memoryDb;
+    return initial;
   }
 
   try {
@@ -60,31 +59,24 @@ export function getDatabase(): DatabaseSchema {
     memoryDb = JSON.parse(raw);
     return memoryDb!;
   } catch (err) {
-    console.error('Error reading database file, resetting to default:', err);
-    const fallback: DatabaseSchema = {
-      household: DEFAULT_HOUSEHOLD,
-      activeTripId: null,
-      trips: {},
-      history: [],
-    };
-    saveDatabase(fallback);
-    memoryDb = fallback;
-    return memoryDb;
+    console.error('Error reading database file:', err);
+    throw err;
   }
 }
 
 export function saveDatabase(data: DatabaseSchema): void {
-  memoryDb = data;
   ensureDataDir();
   const tempFile = `${DB_FILE}.tmp.${Date.now()}`;
   try {
     fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf-8');
     fs.renameSync(tempFile, DB_FILE);
+    memoryDb = data;
   } catch (err) {
     console.error('Error writing database file:', err);
     try {
       if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
     } catch {}
+    throw err;
   }
 }
 
@@ -97,8 +89,7 @@ export function getHousehold(): Household {
 
 export function updateHousehold(household: Household): Household {
   const db = getDatabase();
-  db.household = household;
-  saveDatabase(db);
+  saveDatabase({ ...db, household });
   tripEvents.emit('household-updated', household);
   return household;
 }
@@ -116,9 +107,11 @@ export function getActiveTrip(): Trip | null {
 
 export function saveTrip(trip: Trip): Trip {
   const db = getDatabase();
-  db.trips[trip.id] = trip;
-  db.activeTripId = trip.id;
-  saveDatabase(db);
+  saveDatabase({
+    ...db,
+    trips: { ...db.trips, [trip.id]: trip },
+    activeTripId: trip.id,
+  });
   tripEvents.emit(`trip-updated:${trip.id}`, trip);
   return trip;
 }
@@ -133,8 +126,7 @@ export function updateTripPartial(tripId: string, updates: Partial<Trip>): Trip 
     ...updates,
   };
 
-  db.trips[tripId] = updated;
-  saveDatabase(db);
+  saveDatabase({ ...db, trips: { ...db.trips, [tripId]: updated } });
   tripEvents.emit(`trip-updated:${tripId}`, updated);
   return updated;
 }
@@ -144,19 +136,20 @@ export function archiveTrip(tripId: string): Trip | null {
   const trip = db.trips[tripId];
   if (!trip) return null;
 
-  trip.status = 'settled';
-  if (!db.history.some((t) => t.id === tripId)) {
-    db.history.unshift(trip);
-  }
+  const archived = { ...trip, status: 'settled' as const };
+  const history = db.history.some((t) => t.id === tripId)
+    ? db.history.map((t) => t.id === tripId ? archived : t)
+    : [archived, ...db.history];
 
-  if (db.activeTripId === tripId) {
-    db.activeTripId = null;
-  }
-
-  saveDatabase(db);
-  tripEvents.emit(`trip-updated:${tripId}`, trip);
-  tripEvents.emit('history-updated', db.history);
-  return trip;
+  saveDatabase({
+    ...db,
+    trips: { ...db.trips, [tripId]: archived },
+    activeTripId: db.activeTripId === tripId ? null : db.activeTripId,
+    history,
+  });
+  tripEvents.emit(`trip-updated:${tripId}`, archived);
+  tripEvents.emit('history-updated', history);
+  return archived;
 }
 
 export function getTripHistory(): Trip[] {

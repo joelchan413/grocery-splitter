@@ -41,6 +41,7 @@ export default function Home() {
   const [isIdentifyModalOpen, setIsIdentifyModalOpen] = useState(false);
   const [tripHistory, setTripHistory] = useState<Trip[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Callback when server-side SSE sends an updated trip
   const handleTripUpdatedFromServer = useCallback((updated: Trip) => {
@@ -55,9 +56,10 @@ export default function Home() {
   }, []);
 
   // Real-time synchronization hook
-  const { broadcastTripUpdate, syncStatus } = useTripSync({
+  const { broadcastTripUpdate } = useTripSync({
     trip: activeTrip,
     onTripUpdated: handleTripUpdatedFromServer,
+    onSyncError: setSaveError,
   });
 
   // 1. Initial Load & Hydration
@@ -135,13 +137,16 @@ export default function Home() {
     setIsFirstTimeSetup(false);
 
     try {
-      await fetch('/api/household', {
+      const response = await fetch('/api/household', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       });
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      setSaveError(null);
     } catch (err) {
       console.error('Error saving household to server:', err);
+      setSaveError('Changes could not be saved to the shared server. Keep this page open until storage is fixed.');
     }
   };
 
@@ -178,13 +183,16 @@ export default function Home() {
 
     // Save to server database immediately
     try {
-      await fetch('/api/trips', {
+      const response = await fetch('/api/trips', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newTrip),
       });
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      setSaveError(null);
     } catch (err) {
       console.error('Failed to create trip on server:', err);
+      setSaveError('Changes could not be saved to the shared server. Keep this page open until storage is fixed.');
     }
   };
 
@@ -206,13 +214,16 @@ export default function Home() {
     setView('history');
 
     try {
-      await fetch(`/api/trips/${encodeURIComponent(settledTrip.id)}`, {
+      const response = await fetch(`/api/trips/${encodeURIComponent(settledTrip.id)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'archive' }),
       });
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      setSaveError(null);
     } catch (err) {
       console.error('Error archiving trip on server:', err);
+      setSaveError('Changes could not be saved to the shared server. Keep this page open until storage is fixed.');
     }
   };
 
@@ -239,6 +250,12 @@ export default function Home() {
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         onOpenShare={() => setIsShareModalOpen(true)}
       />
+
+      {saveError && (
+        <div role="alert" className="bg-red-50 px-4 py-3 text-center text-sm text-red-800 dark:bg-red-950 dark:text-red-200">
+          {saveError}
+        </div>
+      )}
 
       <main className="flex-1">
         {view === 'scanner' && (

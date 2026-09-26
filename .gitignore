@@ -22,6 +22,8 @@
 
 # production
 /build
+/data/database.json
+/data/database.json.tmp.*
 
 # misc
 .DS_Store

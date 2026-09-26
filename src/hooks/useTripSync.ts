@@ -1,15 +1,15 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { Trip } from '@/types';
 
 interface UseTripSyncProps {
   trip: Trip | null;
   onTripUpdated: (updated: Trip) => void;
+  onSyncError: (message: string | null) => void;
 }
 
-export function useTripSync({ trip, onTripUpdated }: UseTripSyncProps) {
-  const [syncStatus, setSyncStatus] = useState<'connected' | 'connecting' | 'offline'>('offline');
+export function useTripSync({ trip, onTripUpdated, onSyncError }: UseTripSyncProps) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const tripIdRef = useRef<string | null>(trip?.id || null);
 
@@ -23,19 +23,12 @@ export function useTripSync({ trip, onTripUpdated }: UseTripSyncProps) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
       }
-      setSyncStatus('offline');
       return;
     }
-
-    setSyncStatus('connecting');
 
     const sseUrl = `/api/trips/${encodeURIComponent(trip.id)}/events`;
     const es = new EventSource(sseUrl);
     eventSourceRef.current = es;
-
-    es.onopen = () => {
-      setSyncStatus('connected');
-    };
 
     es.onmessage = (event) => {
       if (!event.data || event.data.startsWith(':')) return; // Ignore heartbeat
@@ -49,10 +42,6 @@ export function useTripSync({ trip, onTripUpdated }: UseTripSyncProps) {
       }
     };
 
-    es.onerror = () => {
-      setSyncStatus('offline');
-    };
-
     return () => {
       es.close();
       eventSourceRef.current = null;
@@ -63,18 +52,20 @@ export function useTripSync({ trip, onTripUpdated }: UseTripSyncProps) {
   const broadcastTripUpdate = useCallback(async (updated: Trip) => {
     onTripUpdated(updated); // Instant optimistic update
     try {
-      await fetch(`/api/trips/${encodeURIComponent(updated.id)}`, {
+      const response = await fetch(`/api/trips/${encodeURIComponent(updated.id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       });
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      onSyncError(null);
     } catch (err) {
       console.error('Failed to sync trip update with server:', err);
+      onSyncError('Changes could not be saved to the shared server. Keep this page open until storage is fixed.');
     }
-  }, [onTripUpdated]);
+  }, [onTripUpdated, onSyncError]);
 
   return {
-    syncStatus,
     broadcastTripUpdate,
   };
 }

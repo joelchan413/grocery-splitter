@@ -18,8 +18,18 @@ export function calculateTripSettlement(
   trip: Trip,
   household: Household
 ): TripSettlementSummary {
-  const payer = household.participants.find((p) => p.id === trip.payerId) || household.participants[0];
+  const payer = household.participants.find((p) => p.id === trip.payerId) || household.participants[0] || {
+    id: trip.payerId || 'unknown',
+    name: 'Unknown Roommate',
+    avatarEmoji: '🛒',
+    color: '#2563EB',
+    venmoHandle: '',
+  };
   const numParticipants = household.participants.length || 1;
+  const items = Array.isArray(trip.items) ? trip.items : [];
+  const claims = trip.claims || {};
+  const taxTotal = typeof trip.taxTotal === 'number' && !Number.isNaN(trip.taxTotal) ? trip.taxTotal : 0;
+  const basketDiscount = typeof trip.basketDiscount === 'number' && !Number.isNaN(trip.basketDiscount) ? trip.basketDiscount : 0;
 
   // Initialize tracking containers for each participant
   interface AccParticipant {
@@ -52,8 +62,8 @@ export function calculateTripSettlement(
   let totalTaxableGross = 0;
 
   // 1. Process each Line Item and allocate claims & unclaimed portions
-  for (const item of trip.items) {
-    const itemTotal = item.quantity * item.unitPrice;
+  for (const item of items) {
+    const itemTotal = (item.quantity || 0) * (item.unitPrice || 0);
     const lineDiscount = item.lineDiscount || 0;
     const itemNet = Math.max(0, itemTotal - lineDiscount);
 
@@ -63,7 +73,7 @@ export function calculateTripSettlement(
       totalTaxableGross += itemNet;
     }
 
-    const itemClaims = trip.claims[item.id] || {};
+    const itemClaims = claims[item.id] || {};
     let totalClaimedQty = 0;
     for (const qty of Object.values(itemClaims)) {
       if (qty > 0) totalClaimedQty += qty;
@@ -132,7 +142,7 @@ export function calculateTripSettlement(
   }
 
   const itemsSubtotalNet = Math.max(0, totalItemsGross - totalLineDiscounts);
-  const effectiveTaxRate = totalTaxableGross > 0 ? trip.taxTotal / totalTaxableGross : 0;
+  const effectiveTaxRate = totalTaxableGross > 0 ? taxTotal / totalTaxableGross : 0;
 
   // 2. Compute individual taxes, basket discounts, net owed, and Venmo deep links
   const participantSettlements: ParticipantSettlement[] = [];
@@ -142,7 +152,7 @@ export function calculateTripSettlement(
     
     // Proportional Basket Discount
     const basketDiscountShare =
-      itemsSubtotalNet > 0 ? (participantSubtotal / itemsSubtotalNet) * trip.basketDiscount : 0;
+      itemsSubtotalNet > 0 ? (participantSubtotal / itemsSubtotalNet) * basketDiscount : 0;
 
     // Proportional Tax Attribution (ADR 0001)
     const taxAttributed = acc.taxableSubtotal * effectiveTaxRate;
@@ -154,7 +164,7 @@ export function calculateTripSettlement(
 
     const netOwed = acc.isPayer ? 0 : round2(totalCalculated);
 
-    const cleanPayerVenmo = payer.venmoHandle.replace(/^@/, '').trim();
+    const cleanPayerVenmo = (payer.venmoHandle || '').replace(/^@/, '').trim();
     const formattedAmount = netOwed.toFixed(2);
     const tripNote = `Groceries at ${trip.storeName || 'Store'} (${trip.date || 'Today'})`;
     
@@ -185,7 +195,7 @@ export function calculateTripSettlement(
   }
 
   // 3. Generate clean group chat summary for iMessage / WhatsApp
-  const totalBill = round2(itemsSubtotalNet + trip.taxTotal - trip.basketDiscount);
+  const totalBill = round2(itemsSubtotalNet + taxTotal - basketDiscount);
   const summaryLines: string[] = [
     `🛒 Grocery Split: ${trip.storeName || 'Groceries'} (${trip.date || 'Recent'})`,
     `💳 Paid by: ${payer.name} ($${totalBill.toFixed(2)} total)`,
@@ -211,8 +221,8 @@ export function calculateTripSettlement(
     payer,
     totalBill,
     itemsSubtotal: round2(itemsSubtotalNet),
-    taxTotal: round2(trip.taxTotal),
-    basketDiscount: round2(trip.basketDiscount),
+    taxTotal: round2(taxTotal),
+    basketDiscount: round2(basketDiscount),
     participants: participantSettlements,
     groupChatSummary: summaryLines.join('\n'),
   };

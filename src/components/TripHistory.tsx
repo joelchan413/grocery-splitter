@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Calendar, ShoppingBag, ArrowLeft, ArrowRight, User } from 'lucide-react';
+import { Calendar, ShoppingBag, ArrowLeft, ArrowRight } from 'lucide-react';
 import { Trip, Household } from '@/types';
 import { calculateTripSettlement } from '@/lib/calculations';
 
@@ -18,6 +18,14 @@ export function TripHistory({
   onSelectTrip,
   onBackToActive,
 }: TripHistoryProps) {
+  const sortedHistory = React.useMemo(() => {
+    return [...(history || [])].sort((a, b) => {
+      const timeA = new Date(a.updatedAt || a.createdAt || a.date).getTime() || 0;
+      const timeB = new Date(b.updatedAt || b.createdAt || b.date).getTime() || 0;
+      return timeB - timeA;
+    });
+  }, [history]);
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="flex items-center justify-between mb-6">
@@ -28,14 +36,14 @@ export function TripHistory({
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back
           </button>
-          <h1 className="text-2xl font-black text-slate-900 dark:text-white">Trip History</h1>
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white">Trip History Archive</h1>
           <p className="text-xs text-slate-500">
             View all scanned grocery runs, active claiming sessions, and settlements.
           </p>
         </div>
       </div>
 
-      {history.length === 0 ? (
+      {sortedHistory.length === 0 ? (
         <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-xs dark:border-slate-800 dark:bg-slate-900">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500 mb-3">
             <ShoppingBag className="h-7 w-7" />
@@ -47,11 +55,21 @@ export function TripHistory({
         </div>
       ) : (
         <div className="space-y-3">
-          {history.map((trip) => {
+          {sortedHistory.map((trip) => {
             const payer =
               household.participants.find((p) => p.id === trip.payerId) ||
-              household.participants[0];
+              household.participants[0] || {
+                id: trip.payerId || 'unknown',
+                name: 'Roommate',
+                avatarEmoji: '🛒',
+                color: '#2563EB',
+                venmoHandle: '',
+              };
             const summary = calculateTripSettlement(trip, household);
+            const totalBill = typeof summary.totalBill === 'number' && !Number.isNaN(summary.totalBill)
+              ? summary.totalBill
+              : 0;
+            const itemsCount = Array.isArray(trip.items) ? trip.items.length : 0;
 
             return (
               <div
@@ -84,12 +102,12 @@ export function TripHistory({
                     </div>
                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
                       <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" /> {trip.date}
+                        <Calendar className="h-3 w-3" /> {trip.date || 'Recent Date'}
                       </span>
                       <span>•</span>
                       <span>Paid by {payer.name}</span>
                       <span>•</span>
-                      <span>{trip.items.length} items</span>
+                      <span>{itemsCount} items</span>
                     </div>
                   </div>
                 </div>
@@ -100,7 +118,7 @@ export function TripHistory({
                       Total
                     </span>
                     <span className="text-base font-black text-slate-900 dark:text-white">
-                      ${summary.totalBill.toFixed(2)}
+                      ${totalBill.toFixed(2)}
                     </span>
                   </div>
                   <ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all" />

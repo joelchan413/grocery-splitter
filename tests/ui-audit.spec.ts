@@ -101,10 +101,10 @@ test.describe('GrocerySplit Complete User Flow and UI Audit', () => {
     // 6. Finish and Archive Trip
     await page.getByRole('button', { name: /Finish & Archive/i }).click();
     await expect(page.getByText(/Trip History Archive/i)).toBeVisible();
-    await expect(page.getByText("Trader Joe's")).toBeVisible();
+    await expect(page.getByText("Trader Joe's").first()).toBeVisible();
 
     // Click archived trip to inspect historical view
-    await page.getByText("Trader Joe's").click();
+    await page.getByText("Trader Joe's").first().click();
     await expect(page.getByText(/Trip Settlement Breakdown/i)).toBeVisible();
 
     // Check console errors

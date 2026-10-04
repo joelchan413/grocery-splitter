@@ -9,6 +9,7 @@ import {
   loadTripHistory,
   saveTripHistory,
   addOrUpdateTripHistory,
+  mergeTripHistory,
   archiveTrip,
   loadActiveParticipantId,
   saveActiveParticipantId,
@@ -62,9 +63,9 @@ export default function Home() {
       }
       saveActiveTrip(serverTrip);
       addOrUpdateTripHistory(serverTrip);
-      setTripHistory(loadTripHistory());
       return serverTrip;
     });
+    setTripHistory(loadTripHistory());
   }, []);
 
   // Real-time synchronization hook
@@ -115,11 +116,11 @@ export default function Home() {
       } else if (savedTrip) {
         // Ensure server has this active trip registered
         try {
-          fetch('/api/trips', {
+          await fetch('/api/trips', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(savedTrip),
-          }).catch(() => {});
+          });
         } catch {}
 
         if (savedTrip.status === 'review') {
@@ -149,9 +150,11 @@ export default function Home() {
         }
         if (histRes.ok) {
           const serverHistory: Trip[] = await histRes.json();
-          if (Array.isArray(serverHistory) && serverHistory.length > 0) {
-            setTripHistory(serverHistory);
-            saveTripHistory(serverHistory);
+          if (Array.isArray(serverHistory)) {
+            const currentLocal = loadTripHistory();
+            const merged = mergeTripHistory(currentLocal, serverHistory);
+            setTripHistory(merged);
+            saveTripHistory(merged);
           }
         }
       } catch {}
@@ -246,7 +249,11 @@ export default function Home() {
 
   const handleArchiveCurrentTrip = async () => {
     if (!activeTrip) return;
-    const settledTrip: Trip = { ...activeTrip, status: 'settled' };
+    const settledTrip: Trip = {
+      ...activeTrip,
+      status: 'settled',
+      updatedAt: new Date().toISOString(),
+    };
     archiveTrip(settledTrip);
     setTripHistory(loadTripHistory());
     setActiveTrip(null);
@@ -268,6 +275,24 @@ export default function Home() {
     }
   };
 
+  const handleOpenHistory = async () => {
+    setView('history');
+    try {
+      const res = await fetch('/api/trips?view=history');
+      if (res.ok) {
+        const serverHistory: Trip[] = await res.json();
+        if (Array.isArray(serverHistory)) {
+          const currentLocal = loadTripHistory();
+          const merged = mergeTripHistory(currentLocal, serverHistory);
+          setTripHistory(merged);
+          saveTripHistory(merged);
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching history:', e);
+    }
+  };
+
   if (!isHydrated) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
@@ -286,7 +311,7 @@ export default function Home() {
         activeView={view}
         hasActiveTrip={Boolean(activeTrip && (view === 'claiming' || view === 'settlement' || view === 'review'))}
         onNewTrip={handleNewTrip}
-        onOpenHistory={() => setView('history')}
+        onOpenHistory={handleOpenHistory}
         onOpenHousehold={() => setIsHouseholdModalOpen(true)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         onOpenShare={() => setIsShareModalOpen(true)}

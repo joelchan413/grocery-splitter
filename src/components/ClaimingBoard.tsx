@@ -242,11 +242,16 @@ export function ClaimingBoard({
 
       {/* Items Section Header */}
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-bold text-slate-900 dark:text-white">
-          Receipt Items ({trip.items.length})
-        </h2>
+        <div>
+          <h2 className="text-base font-bold text-slate-900 dark:text-white">
+            {trip.storeName}
+          </h2>
+          <p className="text-xs text-slate-400">
+            Receipt Items ({trip.items.length})
+          </p>
+        </div>
         <span className="text-xs text-slate-400">
-          Unclaimed items auto-split 4 ways as household shared
+          Unclaimed items auto-split {household.participants.length} ways as household shared
         </span>
       </div>
 

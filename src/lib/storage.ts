@@ -120,24 +120,56 @@ export function saveTripHistory(history: Trip[]): void {
   }
 }
 
+export function getTripTimestamp(trip: Partial<Trip>): number {
+  const timeStr = trip.updatedAt || trip.createdAt || trip.date;
+  if (!timeStr) return 0;
+  const t = new Date(timeStr).getTime();
+  return Number.isNaN(t) ? 0 : t;
+}
+
+export function mergeTripHistory(localHistory: Trip[], incomingHistory: Trip[]): Trip[] {
+  const map = new Map<string, Trip>();
+
+  for (const trip of incomingHistory || []) {
+    if (trip && trip.id) {
+      map.set(trip.id, trip);
+    }
+  }
+
+  for (const localTrip of localHistory || []) {
+    if (!localTrip || !localTrip.id) continue;
+    const existing = map.get(localTrip.id);
+    if (!existing) {
+      map.set(localTrip.id, localTrip);
+    } else {
+      const localTime = getTripTimestamp(localTrip);
+      const incomingTime = getTripTimestamp(existing);
+      if (localTime > incomingTime) {
+        map.set(localTrip.id, localTrip);
+      }
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => {
+    const timeA = getTripTimestamp(a);
+    const timeB = getTripTimestamp(b);
+    return timeB - timeA;
+  });
+}
+
 export function addOrUpdateTripHistory(trip: Trip): void {
   if (typeof window === 'undefined') return;
   try {
     const history = loadTripHistory();
-    const existingIndex = history.findIndex((t) => t.id === trip.id);
-    if (existingIndex >= 0) {
-      history[existingIndex] = trip;
-    } else {
-      history.unshift(trip);
-    }
-    saveTripHistory(history);
+    const updated = mergeTripHistory(history, [trip]);
+    saveTripHistory(updated);
   } catch (e) {
     console.error('Error updating trip history:', e);
   }
 }
 
 export function archiveTrip(trip: Trip): void {
-  addOrUpdateTripHistory({ ...trip, status: 'settled' });
+  addOrUpdateTripHistory({ ...trip, status: 'settled', updatedAt: new Date().toISOString() });
 }
 
 export function loadGeminiApiKey(): string {

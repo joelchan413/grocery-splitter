@@ -3,8 +3,8 @@
 import React, { useState, useRef } from 'react';
 import { Camera, Upload, Sparkles, X, FileText, AlertCircle, Loader2 } from 'lucide-react';
 import { Household, Trip, LineItem } from '@/types';
-import { SAMPLE_RECEIPTS, ParsedReceiptData } from '@/lib/gemini';
-import { loadGeminiApiKey, loadSelectedAiModel, AVAILABLE_MODELS } from '@/lib/storage';
+import { SAMPLE_RECEIPTS, ParsedReceiptData } from '@/lib/receipts';
+import { readReceiptResponse } from '@/lib/receipt-response';
 
 interface ReceiptScannerProps {
   household: Household;
@@ -50,22 +50,15 @@ export function ReceiptScanner({ household, onTripScanned }: ReceiptScannerProps
     setErrorMessage(null);
 
     try {
-      const customApiKey = loadGeminiApiKey();
-      const selectedModel = loadSelectedAiModel();
       const res = await fetch('/api/scan-receipt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           images,
-          apiKey: customApiKey || undefined,
-          model: selectedModel,
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to scan receipt image.');
-      }
+      const data = await readReceiptResponse(res);
 
       constructAndEmitTrip(data);
     } catch (err: any) {
@@ -225,7 +218,7 @@ export function ReceiptScanner({ household, onTripScanned }: ReceiptScannerProps
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
                     <span>
-                      Extracting items with {AVAILABLE_MODELS.find(m => m.id === loadSelectedAiModel())?.name || 'Gemini Flash'}...
+                      Extracting items with Codex...
                     </span>
                   </>
                 ) : (

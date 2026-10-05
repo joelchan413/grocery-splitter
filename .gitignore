@@ -48,3 +48,6 @@ next-env.d.ts
 # persistent database
 /data/*.json
 /data/*.tmp.*
+
+# Codex login tokens and local CLI state
+/codex-home/

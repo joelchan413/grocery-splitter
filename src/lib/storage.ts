@@ -16,29 +16,8 @@ const STORAGE_KEYS = {
   HOUSEHOLD_INITIALIZED: 'grocery_splitter_household_init_v1',
   ACTIVE_TRIP: 'grocery_splitter_active_trip_v1',
   TRIP_HISTORY: 'grocery_splitter_trip_history_v1',
-  GEMINI_API_KEY: 'grocery_splitter_gemini_key_v1',
-  AI_MODEL: 'grocery_splitter_ai_model_v1',
   ACTIVE_PARTICIPANT_ID: 'grocery_splitter_active_participant_v1',
 };
-
-export const AVAILABLE_MODELS = [
-  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', desc: 'Latest multimodal model for fast, reliable extraction' },
-  { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', desc: 'Latest, fastest & highest OCR accuracy', isDefault: true },
-  { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash', desc: 'Next-gen multimodal reasoning' },
-  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', desc: 'Balanced speed and vision precision' },
-  { id: 'gemini-3.0-flash', name: 'Gemini 3.0 Flash', desc: 'Fast multimodal structured extraction' },
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', desc: 'High efficiency vision model' },
-] as const;
-
-export function loadSelectedAiModel(): string {
-  if (typeof window === 'undefined') return 'gemini-3.7-flash';
-  return localStorage.getItem(STORAGE_KEYS.AI_MODEL) || 'gemini-3.7-flash';
-}
-
-export function saveSelectedAiModel(model: string): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEYS.AI_MODEL, model);
-}
 
 export function isHouseholdInitialized(): boolean {
   if (typeof window === 'undefined') return true;
@@ -171,20 +150,6 @@ export function addOrUpdateTripHistory(trip: Trip): void {
 
 export function archiveTrip(trip: Trip): void {
   addOrUpdateTripHistory({ ...trip, status: 'settled', updatedAt: new Date().toISOString() });
-}
-
-export function loadGeminiApiKey(): string {
-  if (typeof window === 'undefined') return '';
-  return localStorage.getItem(STORAGE_KEYS.GEMINI_API_KEY) || '';
-}
-
-export function saveGeminiApiKey(key: string): void {
-  if (typeof window === 'undefined') return;
-  if (key) {
-    localStorage.setItem(STORAGE_KEYS.GEMINI_API_KEY, key);
-  } else {
-    localStorage.removeItem(STORAGE_KEYS.GEMINI_API_KEY);
-  }
 }
 
 export function loadActiveParticipantId(): string {

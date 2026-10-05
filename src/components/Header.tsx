@@ -81,7 +81,7 @@ export function Header({
           <button
             onClick={onOpenSettings}
             className="flex items-center justify-center rounded-xl p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white transition-all cursor-pointer"
-            title="Settings & API Key"
+            title="Receipt scanning settings"
             aria-label="Settings"
           >
             <Settings className="h-4 w-4" />

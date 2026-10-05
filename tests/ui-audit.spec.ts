@@ -25,12 +25,15 @@ test.describe('GrocerySplit Complete User Flow and UI Audit', () => {
     await expect(page.getByText('Household Setup')).toBeVisible();
     await page.getByRole('button', { name: /Cancel/i }).click();
 
-    // Verify Settings Modal & AI Model Selector
+    await page.route('**/api/scan-receipt', (route) => route.fulfill({ json: {
+      installed: true, authenticated: true, model: 'Codex default', message: 'Ready to scan receipts.',
+    } }));
+    // Verify receipt scanner settings
     await page.getByLabel('Settings').click();
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
-    await expect(page.getByText(/AI Extraction Model/i)).toBeVisible();
-    await expect(page.getByText(/Gemini 3.7 Flash/i)).toBeVisible();
-    await page.getByRole('button', { name: /Close/i }).click();
+    await expect(page.getByText('Codex CLI', { exact: true })).toBeVisible();
+    await expect(page.getByText('Ready to scan receipts.')).toBeVisible();
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
 
     // 2. Select Sample Trader Joe's Receipt
     await page.getByText(/Trader Joe's Run/i).click();

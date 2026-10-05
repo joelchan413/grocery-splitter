@@ -53,7 +53,7 @@ function cliEnvironment(): NodeJS.ProcessEnv {
 function runCli(args: string[], cwd: string, timeout: number): Promise<void> {
   return new Promise((resolve, reject) => {
     // The CLI is installed separately at runtime; do not trace its dynamic path into the image.
-    execFile(/* turbopackIgnore: true */ process.env.RECEIPT_CODEX_BIN || 'codex', args, {
+    const child = execFile(/* turbopackIgnore: true */ process.env.RECEIPT_CODEX_BIN || 'codex', args, {
       cwd, env: cliEnvironment(), timeout, killSignal: 'SIGKILL',
       maxBuffer: 1024 * 1024, encoding: 'utf8', windowsHide: true,
     }, (error, stdout, stderr) => {
@@ -71,6 +71,8 @@ function runCli(args: string[], cwd: string, timeout: number): Promise<void> {
         reject(new ReceiptScanError('Codex could not scan this receipt. Please retry or check the server login in Settings.', 502, 'CLI_FAILED'));
       }
     });
+    // Codex reads piped stdin even with a prompt argument. Signal EOF to start the scan.
+    child.stdin?.end();
   });
 }
 

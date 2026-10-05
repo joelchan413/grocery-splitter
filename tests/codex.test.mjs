@@ -29,23 +29,29 @@ const receipt = {
 function boot({ failure, output = JSON.stringify(receipt), hold, env = {} } = {}) {
   const calls = [];
   const adapter = load('src/lib/codex.ts', { env, execFile(bin, args, options, callback) {
-    calls.push({ bin, args, options });
-    if (args.includes('status')) return callback(null, 'Logged in using ChatGPT', '');
-    if (hold) return hold({ args, options, callback });
-    if (failure) return callback(failure.error, '', failure.stderr);
-    fs.writeFileSync(args[args.indexOf('--output-last-message') + 1], output);
-    callback(null, 'Progress output is not the final receipt', '');
+    const call = { bin, args, options, stdinClosed: false };
+    calls.push(call);
+    // Like the real CLI, do not process the prompt until the input pipe reaches EOF.
+    return { stdin: { end() {
+      call.stdinClosed = true;
+      if (args.includes('status')) return callback(null, 'Logged in using ChatGPT', '');
+      if (hold) return hold({ args, options, callback });
+      if (failure) return callback(failure.error, '', failure.stderr);
+      fs.writeFileSync(args[args.indexOf('--output-last-message') + 1], output);
+      callback(null, 'Progress output is not the final receipt', '');
+    } } };
   } });
   return { ...adapter, calls };
 }
 
-test('scan attaches decoded images, reads final structured output, preserves zero amounts and cleans up', async () => {
+test('scan closes stdin, attaches decoded images, reads final structured output, preserves zeros and cleans up', { timeout: 1000 }, async () => {
   const adapter = boot({ env: { PATH: '/usr/bin', CODEX_HOME: '/private/codex', GEMINI_API_KEY: 'secret', OPENAI_API_KEY: 'secret', RECEIPT_CODEX_MODEL: 'configured-model' } });
   const result = await adapter.parseReceiptImages([image, image]);
   assert.equal(result.items[0].unitPrice, 0);
   assert.equal(result.items[0].totalPrice, 0);
   assert.match(result.items[0].id, /^item-/);
   const scan = adapter.calls[1];
+  assert.ok(adapter.calls.every((call) => call.stdinClosed));
   assert.equal(adapter.calls[0].args.includes('--ignore-user-config'), false);
   assert.ok(scan.args.indexOf('exec') < scan.args.indexOf('--ignore-user-config'));
   assert.equal(scan.args.filter((value) => value === '--image').length, 2);
@@ -83,7 +89,7 @@ test('unauthenticated status is safe and an unauthenticated scan never launches 
   const calls = [];
   const adapter = load('src/lib/codex.ts', { execFile(bin, args, options, callback) {
     calls.push(args);
-    callback({ code: 1 }, '', 'Not logged in');
+    return { stdin: { end() { callback({ code: 1 }, '', 'Not logged in'); } } };
   } });
   assert.equal((await adapter.getCodexStatus()).authenticated, false);
   await assert.rejects(adapter.parseReceiptImages([image]), (error) => error.code === 'LOGIN_REQUIRED');
@@ -91,7 +97,9 @@ test('unauthenticated status is safe and an unauthenticated scan never launches 
 });
 
 test('a missing CLI reports setup needed instead of raw spawn errors', async () => {
-  const adapter = load('src/lib/codex.ts', { execFile(bin, args, options, callback) { callback({ code: 'ENOENT' }, '', ''); } });
+  const adapter = load('src/lib/codex.ts', { execFile(bin, args, options, callback) {
+    return { stdin: { end() { callback({ code: 'ENOENT' }, '', ''); } } };
+  } });
   assert.equal((await adapter.getCodexStatus()).installed, false);
   await assert.rejects(adapter.parseReceiptImages([image]), (error) => error.code === 'CLI_MISSING');
 });

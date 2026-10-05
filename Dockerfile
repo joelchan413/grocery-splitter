@@ -27,12 +27,16 @@ RUN npm run build
 FROM node:22-alpine AS runner
 WORKDIR /app
 
-RUN apk add --no-cache su-exec
+ARG CODEX_VERSION=0.160.1
+RUN apk add --no-cache su-exec ca-certificates \
+    && npm install --global @openai/codex@${CODEX_VERSION}
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENV HOME=/home/nextjs
+ENV CODEX_HOME=/app/codex-home
 
 # Non-root security user
 RUN addgroup --system --gid 1001 nodejs

@@ -48,7 +48,10 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
     await page.getByRole('button', { name: /Cancel/i }).click();
   });
 
-  test('2. Settings modal: AI model selection and API key management', async ({ page }) => {
+  test('2. Settings modal: Codex login status and refresh', async ({ page }) => {
+    await page.route('**/api/scan-receipt', (route) => route.fulfill({ json: {
+      installed: true, authenticated: true, model: 'Codex default', message: 'Ready to scan receipts.',
+    } }));
     // Dismiss initial wizard with defaults
     await page.getByRole('button', { name: /Save & Start Splitting/i }).click();
     await expect(page.getByText('Scan Grocery Receipt')).toBeVisible();
@@ -57,24 +60,12 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
     await page.getByLabel('Settings').click();
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
-    // Select Gemini 3.5 Flash via text or radio
-    await page.getByText('Gemini 3.5 Flash').click();
-    await expect(page.locator('input[value="gemini-3.5-flash"]')).toBeChecked();
-
-    // Enter custom API key
-    const apiKeyInput = page.locator('input[type="password"]');
-    await apiKeyInput.fill('AIzaSyTestApiKey12345');
-    await page.getByRole('button', { name: /Save Settings/i }).click();
-    await expect(page.getByText(/Saved!/i)).toBeVisible();
-
-    // Wait for auto-close or close if still open
-    await page.waitForTimeout(1200);
-
-    // Reopen settings to verify persistence
-    await page.getByLabel('Settings').click();
-    await expect(apiKeyInput).toHaveValue('AIzaSyTestApiKey12345');
-    await expect(page.locator('input[value="gemini-3.5-flash"]')).toBeChecked();
-    await page.getByRole('button', { name: /Close/i }).click();
+    await expect(page.getByText('Codex CLI', { exact: true })).toBeVisible();
+    await expect(page.getByText('Ready to scan receipts.')).toBeVisible();
+    await expect(page.locator('input[type="password"]')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Check connection' }).click();
+    await expect(page.getByText('Ready to scan receipts.')).toBeVisible();
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
   });
 
   test('3. Receipt review: editing items, tax flags, adding/deleting items, and recalculation', async ({ page }) => {

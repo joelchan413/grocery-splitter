@@ -20,9 +20,12 @@ build
 
 # Live database is mounted at runtime, never baked into an image
 data
+codex-home
 
 # Environment secrets
 .env*.local
+.env
+.env.*
 
 # Logs & System files
 npm-debug.log*

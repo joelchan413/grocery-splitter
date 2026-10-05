@@ -16,3 +16,4 @@ services:
       - NODE_ENV=production
     volumes:
       - ./data:/app/data
+      - ./codex-home:/app/codex-home

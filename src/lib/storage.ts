@@ -22,6 +22,7 @@ const STORAGE_KEYS = {
 };
 
 export const AVAILABLE_MODELS = [
+  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', desc: 'Latest multimodal model for fast, reliable extraction' },
   { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', desc: 'Latest, fastest & highest OCR accuracy', isDefault: true },
   { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash', desc: 'Next-gen multimodal reasoning' },
   { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', desc: 'Balanced speed and vision precision' },

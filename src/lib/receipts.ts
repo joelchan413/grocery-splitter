@@ -52,4 +52,3 @@ export const SAMPLE_RECEIPTS: { id: string; label: string; data: ParsedReceiptDa
     },
   },
 ];
-

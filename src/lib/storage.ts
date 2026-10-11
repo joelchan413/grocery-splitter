@@ -1,4 +1,5 @@
 import { Household, Trip } from '@/types';
+import { sortTripHistory } from '@/lib/trip-history';
 
 export const DEFAULT_HOUSEHOLD: Household = {
   id: 'household-default',
@@ -130,11 +131,7 @@ export function mergeTripHistory(localHistory: Trip[], incomingHistory: Trip[]):
     }
   }
 
-  return Array.from(map.values()).sort((a, b) => {
-    const timeA = getTripTimestamp(a);
-    const timeB = getTripTimestamp(b);
-    return timeB - timeA;
-  });
+  return sortTripHistory(Array.from(map.values()));
 }
 
 export function addOrUpdateTripHistory(trip: Trip): void {

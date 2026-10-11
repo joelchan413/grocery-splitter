@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { EventEmitter } from 'events';
 import { Household, Trip } from '@/types';
+import { sortTripHistory } from '@/lib/trip-history';
 
 // Global Event Emitter and in-memory DB attached to globalThis to persist across Next.js route bundles
 const globalForDb = globalThis as unknown as {
@@ -180,5 +181,5 @@ export function archiveTrip(tripId: string): Trip | null {
 
 export function getTripHistory(): Trip[] {
   const db = getDatabase();
-  return db.history;
+  return sortTripHistory(db.history);
 }

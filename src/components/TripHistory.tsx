@@ -4,6 +4,7 @@ import React from 'react';
 import { Calendar, ShoppingBag, ArrowLeft, ArrowRight } from 'lucide-react';
 import { Trip, Household } from '@/types';
 import { calculateTripSettlement } from '@/lib/calculations';
+import { sortTripHistory } from '@/lib/trip-history';
 
 interface TripHistoryProps {
   history: Trip[];
@@ -18,13 +19,7 @@ export function TripHistory({
   onSelectTrip,
   onBackToActive,
 }: TripHistoryProps) {
-  const sortedHistory = React.useMemo(() => {
-    return [...(history || [])].sort((a, b) => {
-      const timeA = new Date(a.updatedAt || a.createdAt || a.date).getTime() || 0;
-      const timeB = new Date(b.updatedAt || b.createdAt || b.date).getTime() || 0;
-      return timeB - timeA;
-    });
-  }, [history]);
+  const sortedHistory = React.useMemo(() => sortTripHistory(history || []), [history]);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">

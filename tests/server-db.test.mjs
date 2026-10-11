@@ -10,6 +10,12 @@ import ts from 'typescript';
 const nodeRequire = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+const historyModule = { exports: {} };
+const historySource = fs.readFileSync(path.join(__dirname, '../src/lib/trip-history.ts'), 'utf8');
+new Function('module', 'exports', ts.transpileModule(historySource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText)(historyModule, historyModule.exports);
+
 const source = fs.readFileSync(path.join(__dirname, '../src/lib/server-db.ts'), 'utf8');
 const compiled = ts.transpileModule(source, {
   compilerOptions: {
@@ -37,7 +43,7 @@ function boot(files, { denyWrites = false } = {}) {
   vm.runInNewContext(compiled, {
     module: sandboxModule,
     exports: sandboxModule.exports,
-    require: (name) => name === 'fs' ? fakeFs : name === 'path' ? path.posix : nodeRequire(name),
+    require: (name) => name === '@/lib/trip-history' ? historyModule.exports : name === 'fs' ? fakeFs : name === 'path' ? path.posix : nodeRequire(name),
     process: { cwd: () => '/app' },
     console: { error: () => {} },
   });
@@ -101,12 +107,32 @@ test('a successful update survives a fresh process', () => {
 test('new and patched trips remain in shared history after restart', () => {
   const files = new Map([['/app/data/database.json', JSON.stringify(storedDatabase())]]);
   const db = boot(files);
-  db.saveTrip({ id: 't1', status: 'claiming', storeName: 'First' });
-  db.updateTripPartial('t2', { id: 't2', status: 'claiming', storeName: 'Second' });
+  db.saveTrip({ id: 't1', status: 'claiming', storeName: 'First', createdAt: '2026-08-29T10:00:00Z' });
+  db.updateTripPartial('t2', { id: 't2', status: 'claiming', storeName: 'Second', createdAt: '2026-08-30T10:00:00Z' });
 
   const restarted = boot(files);
   assert.equal(restarted.getDatabase().activeTripId, 't2');
   assert.deepEqual(Array.from(restarted.getTripHistory(), (trip) => trip.id), ['t2', 't1']);
   assert.equal(restarted.getTrip('t1').storeName, 'First');
   assert.equal(restarted.getTrip('t2').storeName, 'Second');
+});
+
+test('shared history order survives reopening, updates, archiving, and restart', () => {
+  const initial = storedDatabase();
+  const trips = [
+    { id: 'b', createdAt: '2026-08-30T10:00:00Z' },
+    { id: 'older', createdAt: '2026-08-29T10:00:00Z' },
+    { id: 'a', createdAt: '2026-08-30T10:00:00Z' },
+  ];
+  initial.history = trips;
+  initial.trips = Object.fromEntries(trips.map((trip) => [trip.id, trip]));
+  const files = new Map([['/app/data/database.json', JSON.stringify(initial)]]);
+  const db = boot(files);
+  const ids = (database) => Array.from(database.getTripHistory(), (trip) => trip.id);
+  assert.deepEqual(ids(db), ['a', 'b', 'older']);
+  db.saveTrip(trips[1]);
+  db.updateTripPartial('older', { storeName: 'Edited' });
+  db.archiveTrip('older');
+  assert.deepEqual(ids(db), ['a', 'b', 'older']);
+  assert.deepEqual(ids(boot(files)), ['a', 'b', 'older']);
 });

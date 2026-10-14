@@ -73,6 +73,56 @@ The container makes the mounted directory writable for its non-root app user at 
 
 If you deployed an earlier version that tracked `data/database.json`, preserve a copy outside the repository before pulling this change. Git may delete or refuse to replace a locally modified tracked file during that pull. Restore the backup to `data/database.json` before starting the new container.
 
+### Automated redeployment
+
+On the Linux Docker host, redeploy an existing running Compose installation with:
+
+```bash
+bash scripts/redeploy.sh --check
+bash scripts/redeploy.sh
+```
+
+Run both commands with `sudo` if Docker or the persistent folders require it. The
+script needs Bash, Docker Compose v2, `flock`, `realpath`, and `tar`. It resolves
+the checkout from its own location, so automation can invoke it by absolute path.
+Schedule all deployments under the same OS account so they share its lock.
+
+The script deploys the current checkout. Update and review the code before running
+it. It validates the existing container's bind mounts, builds a separate image
+while the app stays online, stops the app, and archives `data` and `codex-home`.
+It then recreates the service and checks the home page, household API, and trip
+history API inside the container. Expect a short outage during backup and startup.
+These checks do not verify your reverse proxy or external network access.
+
+If the build fails, the existing app keeps running. If backup fails, the original
+container restarts. If replacement or HTTP checks fail, the script redeploys the
+previous image and exits with a failure status, even when rollback succeeds.
+Image rollback uses the current Compose configuration and keeps the live data.
+Deploy changes to mounts, environment, or database format separately with a
+compatible recovery plan. The script does not automatically restore a database
+backup, which could overwrite writes accepted by the new container.
+
+Backups default to `../grocery-splitter-backups` outside the checkout. Each private
+run directory contains `persistent-state.tar.gz`, the resolved Compose config,
+the image override, and the previous image ID. These files contain login tokens
+and may contain environment secrets. Restrict access and retain them according
+to your backup policy. Tagged candidate and previous images are also retained;
+the script does not prune images or delete backups.
+
+Set `BACKUP_ROOT` to another directory outside the checkout and `HEALTH_TIMEOUT`
+to a startup timeout in seconds, from 1 to 9999. For example:
+
+```bash
+BACKUP_ROOT=/srv/private/grocery-backups HEALTH_TIMEOUT=180 \
+  bash /srv/grocery-splitter/scripts/redeploy.sh
+```
+
+`--check` validates Docker access, the running deployment, mounts, and Compose
+configuration. Actual backup permissions and free space are checked by the backup
+operation, before the container is replaced. Catchable interruptions trigger
+recovery; a host crash or `SIGKILL` requires manual recovery. To test the deployment
+failure paths without Docker, run `bash tests/redeploy.test.sh`.
+
 ## 📐 Architecture & Domain Rules
 
 - [CONTEXT.md](./CONTEXT.md) — Canonical domain glossary and vocabulary.

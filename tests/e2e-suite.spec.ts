@@ -36,7 +36,7 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
 
     // Complete Initial Setup
     await page.getByRole('button', { name: /Save & Start Splitting/i }).click();
-    await expect(page.getByText('Scan Grocery Receipt')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Good groceries. Fair shares.' })).toBeVisible();
     await expect(page.getByText('Elm Street Loft')).toBeVisible();
     await expect(page.getByText('(5 roommates)')).toBeVisible();
 
@@ -54,7 +54,7 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
     } }));
     // Dismiss initial wizard with defaults
     await page.getByRole('button', { name: /Save & Start Splitting/i }).click();
-    await expect(page.getByText('Scan Grocery Receipt')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Good groceries. Fair shares.' })).toBeVisible();
 
     // Open Settings
     await page.getByLabel('Settings').click();
@@ -115,7 +115,7 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
     await page.getByRole('button', { name: /Save & Start Splitting/i }).click();
 
     // Select Trader Joe's Run
-    await page.getByText(/Trader Joe's Run/i).click();
+    await page.getByRole('button', { name: /Trader Joe's.*Open sample/i }).click();
     await page.getByRole('button', { name: /Open for Roommate Claims/i }).click();
 
     // Joel claims Whole Milk
@@ -176,7 +176,7 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
     await page.getByRole('button', { name: /Save & Start Splitting/i }).click();
 
     // 1. Scan and archive Trip 1: Trader Joe's
-    await page.getByText(/Trader Joe's Run/i).click();
+    await page.getByRole('button', { name: /Trader Joe's.*Open sample/i }).click();
     await page.getByRole('button', { name: /Open for Roommate Claims/i }).click();
     await page.getByRole('button', { name: /View Final Breakdown|View Balances/i }).first().click();
     await page.getByRole('button', { name: /Finish & Archive/i }).click();
@@ -187,7 +187,7 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
 
     // 2. Start a New Trip from Header
     await page.getByRole('button', { name: /New Trip/i }).click();
-    await expect(page.getByText('Scan Grocery Receipt')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Good groceries. Fair shares.' })).toBeVisible();
 
     // Scan Trip 2: Costco Wholesale
     await page.getByText(/Costco Wholesale/i).click();

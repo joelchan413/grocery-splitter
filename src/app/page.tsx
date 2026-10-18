@@ -26,6 +26,7 @@ import { ShareTripModal } from '@/components/ShareTripModal';
 import { IdentifyModal } from '@/components/IdentifyModal';
 import { ReceiptScanner } from '@/components/ReceiptScanner';
 import { ReceiptReview } from '@/components/ReceiptReview';
+import { ReceiptPhotos } from '@/components/ReceiptPhotos';
 import { ClaimingBoard } from '@/components/ClaimingBoard';
 import { SettlementView } from '@/components/SettlementView';
 import { TripHistory } from '@/components/TripHistory';
@@ -324,6 +325,10 @@ export default function Home() {
       )}
 
       <main className="flex-1">
+        {activeTrip && (view === 'review' || view === 'claiming' || view === 'settlement') && (
+          <ReceiptPhotos key={activeTrip.id} trip={activeTrip} />
+        )}
+
         {view === 'scanner' && (
           <ReceiptScanner
             household={household}

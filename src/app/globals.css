@@ -1,4 +1,9 @@
 @import "tailwindcss";
+@import "../components/designs/comparison.css";
+@import "../components/designs/anthropic.css";
+@import "../components/designs/taste.css";
+
+@custom-variant dark (&:where([data-color-scheme="dark"], [data-color-scheme="dark"] *));
 
 :root {
   --background: #ffffff;

@@ -51,3 +51,6 @@ next-env.d.ts
 
 # Codex login tokens and local CLI state
 /codex-home/
+
+# Local design-skill working files
+/.taste-skill/

@@ -26,19 +26,16 @@ export function Header({
   onOpenShare,
 }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95">
-      <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3 sm:px-6">
+    <header className="app-header sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95">
+      <div className="app-navigation mx-auto flex max-w-4xl items-center justify-between px-4 py-3 sm:px-6">
         {/* Brand & Household Name */}
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm shadow-emerald-500/20">
+          <div className="app-mark flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm shadow-emerald-500/20">
             <ShoppingBag className="h-5 w-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-slate-900 dark:text-white">GrocerySplit</span>
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                v1.0
-              </span>
+              <span className="app-wordmark font-bold text-slate-900 dark:text-white">GrocerySplit</span>
             </div>
             <button
               onClick={onOpenHousehold}

@@ -18,7 +18,7 @@ test.describe('GrocerySplit Complete User Flow and UI Audit', () => {
 
     // Complete Initial Setup Wizard
     await page.getByRole('button', { name: /Save & Start Splitting/i }).click();
-    await expect(page.getByText('Scan Grocery Receipt')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Good groceries. Fair shares.' })).toBeVisible();
 
     // Verify Household settings can be reopened anytime from Header
     await page.getByRole('button', { name: /Apartment 4B/i }).click();
@@ -36,7 +36,7 @@ test.describe('GrocerySplit Complete User Flow and UI Audit', () => {
     await page.getByRole('button', { name: 'Close', exact: true }).click();
 
     // 2. Select Sample Trader Joe's Receipt
-    await page.getByText(/Trader Joe's Run/i).click();
+    await page.getByRole('button', { name: /Trader Joe's.*Open sample/i }).click();
 
     // 3. Verify Review Screen
     await expect(page.getByText('Verify Receipt Items')).toBeVisible();

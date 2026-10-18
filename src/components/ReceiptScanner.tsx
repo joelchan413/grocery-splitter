@@ -1,275 +1,129 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
-import { Camera, Upload, Sparkles, X, FileText, AlertCircle, Loader2 } from 'lucide-react';
-import { Household, Trip, LineItem } from '@/types';
-import { SAMPLE_RECEIPTS, ParsedReceiptData } from '@/lib/receipts';
+/* eslint-disable @next/next/no-img-element -- Local receipt previews use data URLs with unknown dimensions. */
+import { useState, useRef, type ChangeEvent } from 'react';
+import { Camera, Upload, X, AlertCircle, Loader2, Check, ArrowRight } from 'lucide-react';
+import type { Household, Trip } from '@/types';
+import { SAMPLE_RECEIPTS, type ParsedReceiptData } from '@/lib/receipts';
 import { readReceiptResponse } from '@/lib/receipt-response';
+import { AnthropicScanner } from './designs/AnthropicScanner';
+import { TasteScanner } from './designs/TasteScanner';
+import type { DesignVariant } from './designs/DesignSwitcher';
 
 interface ReceiptScannerProps {
   household: Household;
   onTripScanned: (newTrip: Trip) => void;
+  design: DesignVariant;
 }
 
-export function ReceiptScanner({ household, onTripScanned }: ReceiptScannerProps) {
-  const [selectedPayerId, setSelectedPayerId] = useState<string>(
-    household.participants[0]?.id || 'p1'
-  );
+export function ReceiptScanner({ household, onTripScanned, design }: ReceiptScannerProps) {
+  const [selectedPayerId, setSelectedPayerId] = useState(household.participants[0]?.id || 'p1');
   const [images, setImages] = useState<string[]>([]);
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []).slice(0, 3 - images.length);
+    event.target.value = '';
+    if (!files.length) return;
     setErrorMessage(null);
+    try {
+      const photos = await Promise.all(files.map(file => new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('Could not read this photo. Please choose it again.'));
+        reader.readAsDataURL(file);
+      })));
+      setImages(previous => [...previous, ...photos].slice(0, 3));
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Could not read these photos. Please try again.');
+    }
+  };
 
-    const files = Array.from(e.target.files);
-    files.slice(0, 3 - images.length).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setImages((prev) => [...prev, event.target!.result as string]);
-        }
-      };
-      reader.readAsDataURL(file);
+  const constructAndEmitTrip = (parsed: ParsedReceiptData, receiptImages = images) => {
+    const now = Date.now();
+    onTripScanned({
+      id: `trip-${now}`,
+      householdId: household.id,
+      storeName: parsed.storeName || 'Grocery Store',
+      date: parsed.date || new Date().toISOString().split('T')[0],
+      payerId: selectedPayerId,
+      items: parsed.items.map((item, index) => ({ ...item, id: item.id || `item-${now}-${index}` })),
+      taxTotal: parsed.taxTotal || 0,
+      basketDiscount: parsed.basketDiscount || 0,
+      receiptImages,
+      claims: {},
+      readyParticipantIds: [],
+      status: 'review',
+      createdAt: new Date().toISOString(),
     });
   };
 
-  const handleRemoveImage = (index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
-  };
-
   const handleParseImages = async () => {
-    if (images.length === 0) {
-      setErrorMessage('Please upload or snap at least 1 receipt photo.');
-      return;
-    }
-
+    if (!images.length) return;
     setIsProcessing(true);
     setErrorMessage(null);
-
     try {
-      const res = await fetch('/api/scan-receipt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          images,
-        }),
+      const response = await fetch('/api/scan-receipt', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ images }),
       });
-
-      const data = await readReceiptResponse(res);
-
-      constructAndEmitTrip(data);
-    } catch (err: any) {
-      console.error(err);
-      setErrorMessage(
-        err.message || 'Error processing receipt. You can try another photo or use a sample receipt.'
-      );
+      constructAndEmitTrip(await readReceiptResponse(response));
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Could not scan this receipt. Try another photo or a sample receipt.');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleUseSample = (sample: typeof SAMPLE_RECEIPTS[0]) => {
-    setIsProcessing(true);
-    setTimeout(() => {
-      constructAndEmitTrip(sample.data);
-      setIsProcessing(false);
-    }, 400);
-  };
-
-  const constructAndEmitTrip = (parsed: ParsedReceiptData) => {
-    const newTrip: Trip = {
-      id: `trip-${Date.now()}`,
-      householdId: household.id,
-      storeName: parsed.storeName || 'Grocery Store',
-      date: parsed.date || new Date().toISOString().split('T')[0],
-      payerId: selectedPayerId,
-      items: parsed.items.map((it, idx) => ({
-        ...it,
-        id: it.id || `item-${Date.now()}-${idx}`,
-      })),
-      taxTotal: parsed.taxTotal || 0,
-      basketDiscount: parsed.basketDiscount || 0,
-      receiptImages: images,
-      claims: {},
-      readyParticipantIds: [],
-      status: 'review',
-      createdAt: new Date().toISOString(),
-    };
-
-    onTripScanned(newTrip);
-  };
-
-  return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
-      {/* Header Info */}
-      <div className="text-center mb-8">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 mb-3">
-          <Sparkles className="h-3.5 w-3.5" /> AI Receipt Scanner
-        </span>
-        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
-          Scan Grocery Receipt
-        </h1>
-        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          Upload receipt photos to automatically extract items, prices, and taxability status.
-        </p>
-      </div>
-
-      <div className="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
-        {/* Step 1: Who fronted the bill? */}
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2.5">
-            1. Who paid at the grocery store?
-          </label>
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-            {household.participants.map((p) => {
-              const isSelected = selectedPayerId === p.id;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setSelectedPayerId(p.id)}
-                  className={`flex flex-col items-center gap-1.5 rounded-2xl border p-3 text-center transition-all ${
-                    isSelected
-                      ? 'border-emerald-600 bg-emerald-50/70 shadow-sm ring-2 ring-emerald-500/20 dark:bg-emerald-950/40 dark:border-emerald-500'
-                      : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100/80 dark:border-slate-800 dark:bg-slate-800/40'
-                  }`}
-                >
-                  <span className="text-2xl">{p.avatarEmoji}</span>
-                  <span className="text-xs font-bold text-slate-900 dark:text-white">{p.name}</span>
-                  <span className="text-[10px] text-slate-400">
-                    {isSelected ? '👑 Payer' : p.venmoHandle || 'Roommate'}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Step 2: Upload or capture photos */}
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2.5">
-            2. Upload Receipt Photos (Up to 3 images)
-          </label>
-
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept="image/*"
-            multiple
-            className="hidden"
-          />
-
-          {images.length === 0 ? (
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/50 py-10 px-4 text-center hover:border-emerald-500 hover:bg-emerald-50/20 cursor-pointer transition-all dark:border-slate-700 dark:bg-slate-800/20"
-            >
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 shadow-sm dark:bg-emerald-950 dark:text-emerald-300 mb-3">
-                <Camera className="h-7 w-7" />
-              </div>
-              <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                Snap photo or choose receipt files
-              </p>
-              <p className="text-xs text-slate-400 mt-1">Supports JPG, PNG, WEBP (Supports long receipts)</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-3">
-                {images.map((img, idx) => (
-                  <div key={idx} className="relative aspect-[3/4] overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 group">
-                    <img src={img} alt={`Receipt ${idx + 1}`} className="h-full w-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveImage(idx)}
-                      className="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white hover:bg-red-600 transition-colors"
-                      title="Remove image"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                    <span className="absolute bottom-1.5 left-1.5 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                      Photo {idx + 1}
-                    </span>
-                  </div>
-                ))}
-
-                {images.length < 3 && (
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-slate-500 hover:border-emerald-500 hover:bg-emerald-50/20 transition-colors dark:border-slate-700 dark:bg-slate-800/40"
-                  >
-                    <Upload className="h-5 w-5 mb-1" />
-                    <span className="text-xs font-semibold">+ Add photo</span>
-                  </button>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={handleParseImages}
-                disabled={isProcessing}
-                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-3.5 text-sm font-bold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-500 active:scale-[0.99] disabled:opacity-50 transition-all cursor-pointer"
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>
-                      Extracting items with Codex...
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4" />
-                    <span>Scan & Extract Receipt</span>
-                  </>
-                )}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Error Alert */}
-        {errorMessage && (
-          <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-300">
-            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-            <span>{errorMessage}</span>
-          </div>
-        )}
-
-        {/* Instant Demo / Sample Receipts */}
-        <div className="border-t border-slate-100 pt-5 dark:border-slate-800">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              Or Try a Sample Receipt Instantly
-            </span>
-          </div>
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-            {SAMPLE_RECEIPTS.map((sample) => (
-              <button
-                key={sample.id}
-                type="button"
-                onClick={() => handleUseSample(sample)}
-                disabled={isProcessing}
-                className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/60 p-3 text-left hover:border-emerald-500 hover:bg-emerald-50/30 transition-all dark:border-slate-800 dark:bg-slate-800/40"
-              >
-                <div className="flex items-center gap-2.5">
-                  <FileText className="h-4 w-4 text-emerald-600 shrink-0" />
-                  <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                    {sample.label}
-                  </span>
-                </div>
-                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                  Load →
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+  const payer = <>
+    <h2 className="scan-section-title">Who paid?</h2>
+    <p className="scan-section-note">Choose who covered this grocery run.</p>
+    <div className="scan-people" role="group" aria-label="Receipt payer">
+      {household.participants.map(person => <button
+        key={person.id} type="button" disabled={isProcessing}
+        className="scan-person" aria-pressed={selectedPayerId === person.id}
+        onClick={() => setSelectedPayerId(person.id)}
+      >
+        <span className="scan-avatar" aria-hidden="true">{design === 'taste' ? person.name.slice(0, 1) : person.avatarEmoji}</span>
+        <span className="scan-person-name">{person.name}<small>{selectedPayerId === person.id ? 'Paid the bill' : person.venmoHandle || 'Roommate'}</small></span>
+        {selectedPayerId === person.id && <Check className="scan-person-check" size={16} aria-hidden="true" />}
+      </button>)}
     </div>
-  );
+  </>;
+
+  const upload = <>
+    <h2 className="scan-section-title">Add your receipt</h2>
+    <p className="scan-section-note">Up to 3 photos. JPG, PNG or WebP, 8 MB each.</p>
+    <input type="file" aria-label="Receipt photos" ref={fileInputRef} onChange={handleFileChange} accept="image/jpeg,image/png,image/webp" multiple className="sr-only" disabled={isProcessing} tabIndex={-1} />
+    {images.length === 0 ? <button type="button" className="scan-dropzone" onClick={() => fileInputRef.current?.click()} disabled={isProcessing}>
+      <span className="scan-camera"><Camera size={28} strokeWidth={1.5} aria-hidden="true" /></span>
+      <span className="scan-drop-title">Take a photo or choose files</span>
+      <span className="scan-drop-note">Include the items, tax and total.</span>
+      <span className="scan-choose">Choose receipt photos <Upload size={16} aria-hidden="true" /></span>
+    </button> : <div className="scan-photo-list">
+      {images.map((src, index) => <div key={index} className="scan-photo">
+        <img src={src} alt={`Receipt photo ${index + 1}`} />
+        <button type="button" aria-label={`Remove photo ${index + 1}`} disabled={isProcessing} onClick={() => setImages(previous => previous.filter((_, i) => i !== index))}><X size={16} /></button>
+      </div>)}
+      {images.length < 3 && <button type="button" disabled={isProcessing} className="scan-add-photo" onClick={() => fileInputRef.current?.click()}><Upload size={20} aria-hidden="true" /> Add photo</button>}
+    </div>}
+    {images.length > 0 && <button type="button" className="scan-submit" onClick={handleParseImages} disabled={isProcessing}>
+      {isProcessing ? <><Loader2 className="animate-spin" size={18} aria-hidden="true" /> Reading your receipt…</> : <>Scan receipt <ArrowRight size={18} aria-hidden="true" /></>}
+    </button>}
+    <p className="scan-processing-note" role="status" aria-live="polite">{isProcessing ? 'Reading items and prices. This can take up to two minutes.' : 'You can check every item before sharing with roommates.'}</p>
+  </>;
+
+  const samples = <>
+    <div className="scan-samples-heading"><h2 className="scan-section-title">Try a sample receipt</h2><p className="scan-section-note">See how a split works before uploading.</p></div>
+    <div className="scan-sample-list">
+      {SAMPLE_RECEIPTS.map(sample => <button type="button" key={sample.id} disabled={isProcessing} className="scan-sample" onClick={() => constructAndEmitTrip(sample.data, [])}>
+        <span>{sample.data.storeName}<small>{sample.data.items.length} items</small></span>
+        <span className="scan-sample-action">Open sample <ArrowRight size={16} aria-hidden="true" /></span>
+      </button>)}
+    </div>
+  </>;
+  const error = errorMessage && <div role="alert" className="scan-error"><AlertCircle size={18} aria-hidden="true" /><span>{errorMessage}</span></div>;
+  const Presentation = design === 'anthropic' ? AnthropicScanner : TasteScanner;
+  return <Presentation payer={payer} upload={upload} samples={samples} error={error} onChoosePhotos={() => fileInputRef.current?.click()} />;
 }

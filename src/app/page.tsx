@@ -30,6 +30,7 @@ import { ReceiptPhotos } from '@/components/ReceiptPhotos';
 import { ClaimingBoard } from '@/components/ClaimingBoard';
 import { SettlementView } from '@/components/SettlementView';
 import { TripHistory } from '@/components/TripHistory';
+import { DesignSwitcher, type DesignVariant } from '@/components/designs/DesignSwitcher';
 
 type AppView = 'scanner' | 'review' | 'claiming' | 'settlement' | 'history';
 
@@ -46,6 +47,15 @@ export default function Home() {
   const [tripHistory, setTripHistory] = useState<Trip[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [design, setDesign] = useState<DesignVariant>('anthropic');
+
+  const handleDesignChange = (next: DesignVariant) => {
+    setDesign(next);
+    try { localStorage.setItem('grocery_splitter_design_v1', next); } catch {}
+    const url = new URL(window.location.href);
+    url.searchParams.set('design', next);
+    window.history.replaceState({}, '', url);
+  };
 
   // Callback when server-side SSE sends an updated trip
   const handleTripUpdatedFromServer = useCallback((serverTrip: Trip) => {
@@ -79,6 +89,11 @@ export default function Home() {
   // 1. Initial Load & Hydration
   useEffect(() => {
     async function init() {
+      const requestedDesign = new URLSearchParams(window.location.search).get('design');
+      let savedDesign: string | null = null;
+      try { savedDesign = localStorage.getItem('grocery_splitter_design_v1'); } catch {}
+      const initialDesign = requestedDesign || savedDesign;
+      if (initialDesign === 'anthropic' || initialDesign === 'taste') setDesign(initialDesign);
       // Load local state as fast initial fallback
       const savedHousehold = loadHousehold();
       const savedTrip = loadActiveTrip();
@@ -306,7 +321,8 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
+    <div className={`app-shell design-${design} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans`} data-color-scheme={design === 'taste' ? 'dark' : 'light'}>
+      <DesignSwitcher design={design} onChange={handleDesignChange} />
       <Header
         household={household}
         activeView={view}
@@ -331,6 +347,7 @@ export default function Home() {
 
         {view === 'scanner' && (
           <ReceiptScanner
+            design={design}
             household={household}
             onTripScanned={handleTripScanned}
           />

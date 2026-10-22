@@ -28,6 +28,8 @@ function loadModule(relPath) {
     if (name === '@/lib/calculations') return loadModule('../src/lib/calculations.ts');
     if (name === '@/lib/trip-history') return loadModule('../src/lib/trip-history.ts');
     if (name === '@/lib/export-csv') return loadModule('../src/lib/export-csv.ts');
+    if (name === '@/lib/export-photos') return loadModule('../src/lib/export-photos.ts');
+    if (name === '@/lib/zip') return loadModule('../src/lib/zip.ts');
     if (name === '@/components/ExportCsv') return loadModule('../src/components/ExportCsv.tsx');
     return nodeRequire(name);
   });

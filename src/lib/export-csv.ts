@@ -17,7 +17,7 @@ export const EXPORT_COLUMNS = [
 ] as const;
 
 export type ExportResult =
-  | { ok: true; csv: string; rowCount: number; skippedUndated: number }
+  | { ok: true; csv: string; rowCount: number; skippedUndated: number; trips: Trip[] }
   | { ok: false; error: string };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -87,7 +87,7 @@ export function exportTripsToCsv(
     return { ok: false, error: 'Pick who you are in the household before exporting.' };
   }
 
-  const rows: { date: string; id: string; fields: string[] }[] = [];
+  const rows: { date: string; id: string; fields: string[]; trip: Trip }[] = [];
   let skippedUndated = 0;
 
   for (const trip of trips) {
@@ -106,6 +106,7 @@ export function exportTripsToCsv(
     rows.push({
       date: trip.date,
       id: trip.id,
+      trip,
       fields: [
         trip.date,
         trip.storeName ?? '',
@@ -126,5 +127,11 @@ export function exportTripsToCsv(
   rows.sort((a, b) => compareStrings(a.date, b.date) || compareStrings(a.id, b.id));
 
   const lines = [EXPORT_COLUMNS.join(','), ...rows.map((r) => r.fields.map(escapeCsvField).join(','))];
-  return { ok: true, csv: `${lines.join('\r\n')}\r\n`, rowCount: rows.length, skippedUndated };
+  return {
+    ok: true,
+    csv: `${lines.join('\r\n')}\r\n`,
+    rowCount: rows.length,
+    skippedUndated,
+    trips: rows.map((r) => r.trip),
+  };
 }

@@ -371,6 +371,7 @@ export default function Home() {
           <TripHistory
             history={tripHistory}
             household={household}
+            activeParticipantId={activeParticipantId}
             onSelectTrip={(selected) => {
               setActiveTrip(selected);
               saveActiveTrip(selected);

@@ -5,10 +5,12 @@ import { Calendar, ShoppingBag, ArrowLeft, ArrowRight } from 'lucide-react';
 import { Trip, Household } from '@/types';
 import { calculateTripSettlement } from '@/lib/calculations';
 import { sortTripHistory } from '@/lib/trip-history';
+import { ExportCsv } from '@/components/ExportCsv';
 
 interface TripHistoryProps {
   history: Trip[];
   household: Household;
+  activeParticipantId?: string;
   onSelectTrip: (trip: Trip) => void;
   onBackToActive: () => void;
 }
@@ -16,6 +18,7 @@ interface TripHistoryProps {
 export function TripHistory({
   history,
   household,
+  activeParticipantId,
   onSelectTrip,
   onBackToActive,
 }: TripHistoryProps) {
@@ -37,6 +40,8 @@ export function TripHistory({
           </p>
         </div>
       </div>
+
+      <ExportCsv history={sortedHistory} household={household} participantId={activeParticipantId} />
 
       {sortedHistory.length === 0 ? (
         <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-xs dark:border-slate-800 dark:bg-slate-900">

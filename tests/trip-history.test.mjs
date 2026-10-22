@@ -27,6 +27,8 @@ function loadModule(relPath) {
     if (name === '@/types') return {};
     if (name === '@/lib/calculations') return loadModule('../src/lib/calculations.ts');
     if (name === '@/lib/trip-history') return loadModule('../src/lib/trip-history.ts');
+    if (name === '@/lib/export-csv') return loadModule('../src/lib/export-csv.ts');
+    if (name === '@/components/ExportCsv') return loadModule('../src/components/ExportCsv.tsx');
     return nodeRequire(name);
   });
   return mod.exports;

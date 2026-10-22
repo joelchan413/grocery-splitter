@@ -187,6 +187,7 @@ export function calculateTripSettlement(
       taxableSubtotal: round2(acc.taxableSubtotal),
       taxAttributed: round2(taxAttributed),
       netOwed,
+      totalShare: round2(totalCalculated),
       claimedItems: acc.claimedItems,
       householdSharedItems: acc.householdSharedItems,
       venmoDeepLink,

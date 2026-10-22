@@ -56,6 +56,7 @@ export interface ParticipantSettlement {
   taxableSubtotal: number;
   taxAttributed: number;
   netOwed: number; // Amount owed to payer (0 for payer itself)
+  totalShare: number; // This participant's full share of the receipt, payer included
   claimedItems: {
     itemId: string;
     itemName: string;

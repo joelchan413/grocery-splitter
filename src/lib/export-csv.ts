@@ -50,6 +50,20 @@ function compareStrings(a: string, b: string): number {
 }
 
 /**
+ * Trips eligible for export: not hidden, and not unchecked by the user.
+ * Hidden always wins, so a hidden trip can never be exported.
+ */
+export function selectTripsForExport(
+  trips: readonly Trip[],
+  hiddenIds: readonly string[],
+  deselectedIds: readonly string[]
+): Trip[] {
+  const hidden = new Set(hiddenIds);
+  const deselected = new Set(deselectedIds);
+  return trips.filter((trip) => !hidden.has(trip.id) && !deselected.has(trip.id));
+}
+
+/**
  * Builds a CSV of the trips in [start, end] (inclusive, by receipt date) that
  * `participantId` paid for or has a share of. Pure: never modifies the trips.
  *

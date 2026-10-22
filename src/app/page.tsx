@@ -13,6 +13,8 @@ import {
   archiveTrip,
   loadActiveParticipantId,
   saveActiveParticipantId,
+  loadHiddenTripIds,
+  saveHiddenTripIds,
   isHouseholdInitialized,
   setHouseholdInitialized,
   DEFAULT_HOUSEHOLD,
@@ -33,6 +35,18 @@ import { TripHistory } from '@/components/TripHistory';
 
 type AppView = 'scanner' | 'review' | 'claiming' | 'settlement' | 'history';
 
+// Hiding is shared with the household, so the server list is authoritative.
+async function fetchHiddenTripIds(): Promise<string[] | null> {
+  try {
+    const res = await fetch('/api/hidden-trips');
+    if (!res.ok) return null;
+    const ids: unknown = await res.json();
+    return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function Home() {
   const [household, setHousehold] = useState<Household>(DEFAULT_HOUSEHOLD);
   const [activeTrip, setActiveTrip] = useState<Trip | null>(null);
@@ -44,6 +58,7 @@ export default function Home() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isIdentifyModalOpen, setIsIdentifyModalOpen] = useState(false);
   const [tripHistory, setTripHistory] = useState<Trip[]>([]);
+  const [hiddenTripIds, setHiddenTripIds] = useState<string[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -76,6 +91,11 @@ export default function Home() {
     onSyncError: setSaveError,
   });
 
+  // Keep a local copy so hidden trips stay out of exports if the server is unreachable.
+  useEffect(() => {
+    if (isHydrated) saveHiddenTripIds(hiddenTripIds);
+  }, [hiddenTripIds, isHydrated]);
+
   // 1. Initial Load & Hydration
   useEffect(() => {
     async function init() {
@@ -90,6 +110,7 @@ export default function Home() {
       setActiveTrip(savedTrip);
       setTripHistory(savedHistory);
       setActiveParticipantId(savedActiveP);
+      setHiddenTripIds(loadHiddenTripIds());
 
       // Check if joining via share URL param: ?trip=xyz
       const urlParams = new URLSearchParams(window.location.search);
@@ -140,10 +161,12 @@ export default function Home() {
 
       // Sync latest household and history from server
       try {
-        const [hhRes, histRes] = await Promise.all([
+        const [hhRes, histRes, serverHidden] = await Promise.all([
           fetch('/api/household'),
           fetch('/api/trips?view=history'),
+          fetchHiddenTripIds(),
         ]);
+        if (serverHidden) setHiddenTripIds(serverHidden);
         if (hhRes.ok) {
           const serverHousehold: Household = await hhRes.json();
           setHousehold(serverHousehold);
@@ -203,6 +226,28 @@ export default function Home() {
   const handleSelectParticipant = (id: string) => {
     setActiveParticipantId(id);
     saveActiveParticipantId(id);
+  };
+
+  const handleToggleHiddenTrip = async (tripId: string) => {
+    const hidden = !hiddenTripIds.includes(tripId);
+    const withChange = (ids: string[], hide: boolean) =>
+      hide ? (ids.includes(tripId) ? ids : [...ids, tripId]) : ids.filter((id) => id !== tripId);
+
+    setHiddenTripIds((prev) => withChange(prev, hidden));
+    try {
+      const response = await fetch('/api/hidden-trips', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tripId, hidden }),
+      });
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      setSaveError(null);
+    } catch (err) {
+      console.error('Error saving hidden trip to server:', err);
+      // Roll back so this device never disagrees with the shared list, which also drives exports.
+      setHiddenTripIds((prev) => withChange(prev, !hidden));
+      setSaveError('Could not hide or unhide that trip on the shared server. Please try again.');
+    }
   };
 
   const handleNewTrip = () => {
@@ -278,6 +323,9 @@ export default function Home() {
 
   const handleOpenHistory = async () => {
     setView('history');
+    fetchHiddenTripIds().then((ids) => {
+      if (ids) setHiddenTripIds(ids);
+    });
     try {
       const res = await fetch('/api/trips?view=history');
       if (res.ok) {
@@ -372,6 +420,8 @@ export default function Home() {
             history={tripHistory}
             household={household}
             activeParticipantId={activeParticipantId}
+            hiddenTripIds={hiddenTripIds}
+            onToggleHidden={handleToggleHiddenTrip}
             onSelectTrip={(selected) => {
               setActiveTrip(selected);
               saveActiveTrip(selected);

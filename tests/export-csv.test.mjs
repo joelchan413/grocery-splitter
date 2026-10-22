@@ -22,7 +22,7 @@ function loadModule(relPath) {
   return mod.exports;
 }
 
-const { exportTripsToCsv, defaultExportRange, escapeCsvField, EXPORT_COLUMNS } = loadModule('../src/lib/export-csv.ts');
+const { exportTripsToCsv, selectTripsForExport, defaultExportRange, escapeCsvField, EXPORT_COLUMNS } = loadModule('../src/lib/export-csv.ts');
 
 const household = {
   id: 'h1',
@@ -154,6 +154,25 @@ test('fields with commas, quotes, or newlines are quoted and quotes doubled', ()
   assert.equal(escapeCsvField('say "hi"'), '"say ""hi"""');
   assert.equal(escapeCsvField('two\nlines'), '"two\nlines"');
   assert.equal(escapeCsvField('two\r\nlines'), '"two\r\nlines"');
+});
+
+test('hidden and unchecked trips are left out of the export; hidden always wins', () => {
+  const ids = (list) => list.map((t) => t.id);
+  assert.deepEqual(ids(selectTripsForExport(trips, [], [])), ids(trips));
+  assert.deepEqual(ids(selectTripsForExport(trips, ['t-a'], ['t-b'])), ['t-c', 't-f', 't-h', 't-d', 't-e']);
+  // A trip that is both unchecked and hidden is simply excluded once.
+  assert.deepEqual(ids(selectTripsForExport(trips, ['t-a'], ['t-a'])), ids(trips).filter((id) => id !== 't-a'));
+
+  const selected = selectTripsForExport(trips, ['t-a'], ['t-f']);
+  const result = exportTripsToCsv(selected, household, 'p2', '2026-01-01', '2026-12-31');
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.csv.trim().split('\r\n').slice(1).map((row) => row.split(',').pop()), ['t-c', 't-b']);
+});
+
+test('selecting trips does not modify the original list', () => {
+  const copy = [...trips];
+  selectTripsForExport(trips, ['t-a'], ['t-b']);
+  assert.deepEqual(trips, copy);
 });
 
 test('the default range is the current calendar year', () => {

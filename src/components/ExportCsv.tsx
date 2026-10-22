@@ -77,7 +77,7 @@ export function ExportCsv({ history, household, participantId }: ExportCsvProps)
       </div>
       <p className="mt-2 text-[11px] text-slate-500">
         {me
-          ? `Your purchases and shares as ${me.name}, by purchase date.`
+          ? `Your purchases and shares as ${me.name}, by purchase date. Hidden and unchecked trips are left out.`
           : 'Choose who you are on a claiming screen to export your share.'}
       </p>
       {message && (

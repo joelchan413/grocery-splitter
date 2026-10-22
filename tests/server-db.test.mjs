@@ -136,3 +136,32 @@ test('shared history order survives reopening, updates, archiving, and restart',
   assert.deepEqual(ids(db), ['a', 'b', 'older']);
   assert.deepEqual(ids(boot(files)), ['a', 'b', 'older']);
 });
+
+test('hidden trips persist across restart, are idempotent, and leave trips untouched', () => {
+  const initial = storedDatabase();
+  initial.trips.t1 = { id: 't1', status: 'claiming', storeName: 'Original' };
+  initial.history = [initial.trips.t1];
+  const files = new Map([['/app/data/database.json', JSON.stringify(initial)]]);
+  const db = boot(files);
+  const hidden = (database) => Array.from(database.getHiddenTripIds());
+
+  assert.deepEqual(hidden(db), [], 'databases without the field have nothing hidden');
+  assert.deepEqual(Array.from(db.setTripHidden('t1', true)), ['t1']);
+  assert.deepEqual(Array.from(db.setTripHidden('t1', true)), ['t1'], 'hiding twice does not duplicate');
+  assert.deepEqual(Array.from(db.setTripHidden('t2', true)), ['t1', 't2']);
+  assert.deepEqual(hidden(boot(files)), ['t1', 't2']);
+  assert.deepEqual(JSON.parse(JSON.stringify(boot(files).getTrip('t1'))), { id: 't1', status: 'claiming', storeName: 'Original' });
+  assert.equal(boot(files).getTripHistory().length, 1, 'hidden trips stay in shared history');
+
+  assert.deepEqual(Array.from(db.setTripHidden('t1', false)), ['t2']);
+  assert.deepEqual(Array.from(db.setTripHidden('missing', false)), ['t2']);
+  assert.deepEqual(hidden(boot(files)), ['t2']);
+});
+
+test('a failed write leaves the hidden list unchanged', () => {
+  const files = new Map([['/app/data/database.json', JSON.stringify(storedDatabase())]]);
+  const db = boot(files, { denyWrites: true });
+  assert.throws(() => db.setTripHidden('t1', true), /EACCES/);
+  assert.deepEqual(Array.from(db.getHiddenTripIds()), []);
+  assert.deepEqual(Array.from(boot(files).getHiddenTripIds()), []);
+});

@@ -98,6 +98,8 @@ test('exports Alex\'s 2026 trips exactly, sorted by date then receipt_id', () =>
   assert.equal(result.ok, true);
   assert.equal(result.rowCount, 4);
   assert.equal(result.skippedUndated, 1);
+  // The trips behind the rows come back in row order, so attachments (photos) always match the CSV.
+  assert.deepEqual(result.trips.map((t) => t.id), ['t-c', 't-a', 't-b', 't-f']);
 
   const expected = [
     'date,store,receipt_total,food_subtotal,non_food_subtotal,tax,paid_by,my_share,split_method,venmo_status,notes,receipt_id',

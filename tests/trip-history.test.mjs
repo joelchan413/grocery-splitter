@@ -31,6 +31,10 @@ function loadModule(relPath) {
     if (name === './Avatar') return loadModule('../src/components/Avatar.tsx');
     if (name === './ScannerHome') return loadModule('../src/components/ScannerHome.tsx');
     if (name === 'canvas-confetti') return { __esModule: true, default: () => {} };
+    if (name === '@/lib/export-csv') return loadModule('../src/lib/export-csv.ts');
+    if (name === '@/lib/export-photos') return loadModule('../src/lib/export-photos.ts');
+    if (name === '@/lib/zip') return loadModule('../src/lib/zip.ts');
+    if (name === '@/components/ExportCsv') return loadModule('../src/components/ExportCsv.tsx');
     return nodeRequire(name);
   });
   return mod.exports;

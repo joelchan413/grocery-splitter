@@ -60,6 +60,8 @@ The new-run screen also shows the last run as a ledger: what the payer gets back
 
 Amounts always add up to the bill. Each roommate's payment is rounded to the cent, and the payer keeps whatever cents remain. If rounding would collect more than the bill, the roommates whose amounts rounded up the most pay a cent less. If a basket discount is larger than the receipt, the bill is $0.00 rather than negative. Each settlement breakdown shows an adjustment line when its parts differ from its total. Claims from someone who has left the household go back to the shared pool.
 
+Trip history also holds the CSV export. Each row has a checkbox for the export and a button to hide the run for the whole household; hidden runs are left out of exports.
+
 Trip screens share one 896px content width, so the receipt-photo bar and the screen below it start on the same edge.
 
 ## House rules

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ShoppingBag, Users, History, PlusCircle, Settings, QrCode, Radio } from 'lucide-react';
+import { ShoppingBag, Users, History, PlusCircle, Settings, QrCode } from 'lucide-react';
 import { Household } from '@/types';
 
 interface HeaderProps {
@@ -15,6 +15,7 @@ interface HeaderProps {
   onOpenShare?: () => void;
 }
 
+// A top bar on phones and tablets; a labelled sidebar on the page ground from 1101px (see app.css).
 export function Header({
   household,
   activeView,
@@ -25,74 +26,66 @@ export function Header({
   onOpenSettings,
   onOpenShare,
 }: HeaderProps) {
+  const roommates = household.participants.length;
+
   return (
-    <header className="app-header sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95">
-      <div className="app-navigation mx-auto flex max-w-4xl items-center justify-between px-4 py-3 sm:px-6">
-        {/* Brand & Household Name */}
-        <div className="flex items-center gap-3">
-          <div className="app-mark flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm shadow-emerald-500/20">
-            <ShoppingBag className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="app-wordmark font-bold text-slate-900 dark:text-white">GrocerySplit</span>
-            </div>
-            <button
-              onClick={onOpenHousehold}
-              className="group flex items-center gap-1 text-xs text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400 cursor-pointer"
-            >
-              <Users className="h-3 w-3" />
-              <span>{household.name}</span>
-              <span className="text-[10px] text-slate-400">({household.participants.length} roommates)</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Navigation & Actions */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {hasActiveTrip && onOpenShare && (
-            <button
-              onClick={onOpenShare}
-              className="flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-800 shadow-2xs hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 transition-all cursor-pointer"
-              title="Share live room with roommates"
-            >
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
-              <QrCode className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Share Live</span>
-            </button>
-          )}
-
-          <button
-            onClick={onOpenHistory}
-            className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all cursor-pointer ${
-              activeView === 'history'
-                ? 'bg-slate-100 text-slate-900 shadow-xs dark:bg-slate-800 dark:text-white'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white'
-            }`}
-            title="Trip History"
-          >
-            <History className="h-4 w-4" />
-            <span className="hidden sm:inline">History</span>
-          </button>
-
-          <button
-            onClick={onOpenSettings}
-            className="flex items-center justify-center rounded-xl p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white transition-all cursor-pointer"
-            title="Receipt scanning settings"
-            aria-label="Settings"
-          >
-            <Settings className="h-4 w-4" />
-          </button>
-
-          <button
-            onClick={onNewTrip}
-            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-500 active:scale-95 transition-all cursor-pointer"
-          >
-            <PlusCircle className="h-4 w-4" />
-            <span>New Trip</span>
+    <header className="app-header">
+      <div className="app-brand">
+        <ShoppingBag className="app-mark" aria-hidden="true" />
+        <div className="min-w-0">
+          <span className="app-wordmark">GrocerySplit</span>
+          <button type="button" onClick={onOpenHousehold} className="app-household" title="Edit household">
+            <Users aria-hidden="true" />
+            <span>{household.name}</span>
+            <span className="app-household-count">{roommates} {roommates === 1 ? 'roommate' : 'roommates'}</span>
           </button>
         </div>
       </div>
+
+      <nav className="app-nav" aria-label="Main">
+        <button
+          type="button"
+          onClick={onNewTrip}
+          aria-current={activeView === 'scanner' ? 'page' : undefined}
+          aria-label="New trip"
+          title="New trip"
+          className="app-nav-item app-nav-new"
+        >
+          <PlusCircle aria-hidden="true" />
+          <span className="app-nav-label">New trip</span>
+        </button>
+
+        {hasActiveTrip && onOpenShare && (
+          <button type="button" onClick={onOpenShare} className="app-nav-item" aria-label="Share live trip" title="Share live trip">
+            <QrCode aria-hidden="true" />
+            <span className="app-nav-label">Share live</span>
+            <span className="app-nav-live" aria-hidden="true" />
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={onOpenHistory}
+          aria-current={activeView === 'history' ? 'page' : undefined}
+          className="app-nav-item"
+          aria-label="History"
+          title="Trip history"
+        >
+          <History aria-hidden="true" />
+          <span className="app-nav-label">History</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="app-nav-item app-nav-settings"
+          aria-label="Settings"
+          title="Receipt scanning settings"
+        >
+          <Settings aria-hidden="true" />
+          <span className="app-nav-label">Settings</span>
+        </button>
+      </nav>
     </header>
   );
 }

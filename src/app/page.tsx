@@ -30,7 +30,6 @@ import { ReceiptPhotos } from '@/components/ReceiptPhotos';
 import { ClaimingBoard } from '@/components/ClaimingBoard';
 import { SettlementView } from '@/components/SettlementView';
 import { TripHistory } from '@/components/TripHistory';
-import { DesignSwitcher, type DesignVariant } from '@/components/designs/DesignSwitcher';
 
 type AppView = 'scanner' | 'review' | 'claiming' | 'settlement' | 'history';
 
@@ -47,15 +46,6 @@ export default function Home() {
   const [tripHistory, setTripHistory] = useState<Trip[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [design, setDesign] = useState<DesignVariant>('anthropic');
-
-  const handleDesignChange = (next: DesignVariant) => {
-    setDesign(next);
-    try { localStorage.setItem('grocery_splitter_design_v1', next); } catch {}
-    const url = new URL(window.location.href);
-    url.searchParams.set('design', next);
-    window.history.replaceState({}, '', url);
-  };
 
   // Callback when server-side SSE sends an updated trip
   const handleTripUpdatedFromServer = useCallback((serverTrip: Trip) => {
@@ -86,14 +76,19 @@ export default function Home() {
     onSyncError: setSaveError,
   });
 
+  // A saved roommate who has since been removed from the household falls back to the first roommate.
+  const currentParticipantId = household.participants.some((p) => p.id === activeParticipantId)
+    ? activeParticipantId
+    : household.participants[0]?.id ?? activeParticipantId;
+
+  // Each screen opens at its top rather than at the previous screen's scroll position.
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [view]);
+
   // 1. Initial Load & Hydration
   useEffect(() => {
     async function init() {
-      const requestedDesign = new URLSearchParams(window.location.search).get('design');
-      let savedDesign: string | null = null;
-      try { savedDesign = localStorage.getItem('grocery_splitter_design_v1'); } catch {}
-      const initialDesign = requestedDesign || savedDesign;
-      if (initialDesign === 'anthropic' || initialDesign === 'taste') setDesign(initialDesign);
       // Load local state as fast initial fallback
       const savedHousehold = loadHousehold();
       const savedTrip = loadActiveTrip();
@@ -291,6 +286,18 @@ export default function Home() {
     }
   };
 
+  const handleOpenTrip = (selected: Trip) => {
+    setActiveTrip(selected);
+    saveActiveTrip(selected);
+    if (selected.status === 'review') {
+      setView('review');
+    } else if (selected.status === 'settled') {
+      setView('settlement');
+    } else {
+      setView('claiming');
+    }
+  };
+
   const handleOpenHistory = async () => {
     setView('history');
     try {
@@ -311,18 +318,17 @@ export default function Home() {
 
   if (!isHydrated) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
+      <div className="flex min-h-dvh items-center justify-center bg-slate-50" role="status">
         <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent mx-auto mb-2" />
-          <p className="text-xs text-slate-400 font-medium">Loading GrocerySplit...</p>
+          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-slate-900 border-t-transparent motion-reduce:animate-none" aria-hidden="true" />
+          <p className="text-sm text-slate-500">Loading GrocerySplit…</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`app-shell design-${design} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans`} data-color-scheme={design === 'taste' ? 'dark' : 'light'}>
-      <DesignSwitcher design={design} onChange={handleDesignChange} />
+    <div className="app-shell">
       <Header
         household={household}
         activeView={view}
@@ -335,21 +341,23 @@ export default function Home() {
       />
 
       {saveError && (
-        <div role="alert" className="bg-red-50 px-4 py-3 text-center text-sm text-red-800 dark:bg-red-950 dark:text-red-200">
+        <div role="alert" className="app-main bg-red-50 px-4 py-3 text-center text-sm text-red-800">
           {saveError}
         </div>
       )}
 
-      <main className="flex-1">
+      <main className="app-main">
         {activeTrip && (view === 'review' || view === 'claiming' || view === 'settlement') && (
           <ReceiptPhotos key={activeTrip.id} trip={activeTrip} />
         )}
 
         {view === 'scanner' && (
           <ReceiptScanner
-            design={design}
             household={household}
             onTripScanned={handleTripScanned}
+            history={tripHistory}
+            onOpenTrip={handleOpenTrip}
+            onOpenHistory={handleOpenHistory}
           />
         )}
 
@@ -367,7 +375,7 @@ export default function Home() {
           <ClaimingBoard
             trip={activeTrip}
             household={household}
-            activeParticipantId={activeParticipantId}
+            activeParticipantId={currentParticipantId}
             onSelectParticipant={handleSelectParticipant}
             onUpdateTrip={handleUpdateTrip}
             onViewSettlement={() => setView('settlement')}
@@ -388,17 +396,7 @@ export default function Home() {
           <TripHistory
             history={tripHistory}
             household={household}
-            onSelectTrip={(selected) => {
-              setActiveTrip(selected);
-              saveActiveTrip(selected);
-              if (selected.status === 'review') {
-                setView('review');
-              } else if (selected.status === 'settled') {
-                setView('settlement');
-              } else {
-                setView('claiming');
-              }
-            }}
+            onSelectTrip={handleOpenTrip}
             onBackToActive={() => {
               if (activeTrip) {
                 setView(
@@ -417,13 +415,13 @@ export default function Home() {
       </main>
 
       {/* Household & Settings Modals */}
-      <HouseholdModal
+      {isHouseholdModalOpen && <HouseholdModal
         isOpen={isHouseholdModalOpen}
         household={household}
         isFirstTime={isFirstTimeSetup}
         onClose={() => setIsHouseholdModalOpen(false)}
         onSave={handleUpdateHousehold}
-      />
+      />}
 
       <SettingsModal
         isOpen={isSettingsModalOpen}

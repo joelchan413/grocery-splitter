@@ -18,6 +18,7 @@ const STORAGE_KEYS = {
   ACTIVE_TRIP: 'grocery_splitter_active_trip_v1',
   TRIP_HISTORY: 'grocery_splitter_trip_history_v1',
   ACTIVE_PARTICIPANT_ID: 'grocery_splitter_active_participant_v1',
+  HIDDEN_TRIP_IDS: 'grocery_splitter_hidden_trips_v1',
 };
 
 export function isHouseholdInitialized(): boolean {
@@ -147,6 +148,31 @@ export function addOrUpdateTripHistory(trip: Trip): void {
 
 export function archiveTrip(trip: Trip): void {
   addOrUpdateTripHistory({ ...trip, status: 'settled', updatedAt: new Date().toISOString() });
+}
+
+/**
+ * Trips hidden on this device. Kept apart from the trips themselves so the shared
+ * server data is never modified and hiding survives history syncs.
+ */
+export function loadHiddenTripIds(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.HIDDEN_TRIP_IDS);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+  } catch (e) {
+    console.error('Error loading hidden trips:', e);
+    return [];
+  }
+}
+
+export function saveHiddenTripIds(ids: string[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEYS.HIDDEN_TRIP_IDS, JSON.stringify(ids));
+  } catch (e) {
+    console.error('Error saving hidden trips:', e);
+  }
 }
 
 export function loadActiveParticipantId(): string {

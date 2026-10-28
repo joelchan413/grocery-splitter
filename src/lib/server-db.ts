@@ -22,6 +22,8 @@ export interface DatabaseSchema {
   activeTripId: string | null;
   trips: Record<string, Trip>;
   history: Trip[];
+  // Optional so databases written before trip hiding existed still load unchanged.
+  hiddenTripIds?: string[];
 }
 
 const DEFAULT_HOUSEHOLD: Household = {
@@ -182,4 +184,22 @@ export function archiveTrip(tripId: string): Trip | null {
 export function getTripHistory(): Trip[] {
   const db = getDatabase();
   return sortTripHistory(db.history);
+}
+
+export function getHiddenTripIds(): string[] {
+  return [...(getDatabase().hiddenTripIds ?? [])];
+}
+
+/** Hides or unhides a trip for the whole household. Idempotent; the trip itself is never modified. */
+export function setTripHidden(tripId: string, hidden: boolean): string[] {
+  const db = getDatabase();
+  const current = db.hiddenTripIds ?? [];
+  const next = hidden
+    ? current.includes(tripId) ? current : [...current, tripId]
+    : current.filter((id) => id !== tripId);
+  if (next.length === current.length && next.every((id, index) => id === current[index])) return [...current];
+
+  saveDatabase({ ...db, hiddenTripIds: next });
+  tripEvents.emit('hidden-updated', next);
+  return [...next];
 }

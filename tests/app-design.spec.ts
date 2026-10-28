@@ -132,7 +132,7 @@ test('dialogs are labelled, keep focus inside, close with Escape, and history ro
   await page.getByRole('button', { name: /Costco Wholesale.*Open sample/ }).click();
   await page.getByRole('button', { name: 'History' }).click();
   await expect(page.getByRole('heading', { name: 'Trip history' })).toBeVisible();
-  const row = page.getByRole('button', { name: /Costco Wholesale/ });
+  const row = page.getByRole('button', { name: /^Costco Wholesale/ });
   await row.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'Check receipt items' })).toBeVisible();

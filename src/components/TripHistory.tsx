@@ -1,12 +1,14 @@
 'use client';
 
 import React from 'react';
-import { Calendar, ShoppingBag, ArrowLeft, ArrowRight, Eye, EyeOff } from 'lucide-react';
-import { Trip, Household } from '@/types';
+import { ArrowLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
+import { Trip, Household, Participant } from '@/types';
 import { calculateTripSettlement } from '@/lib/calculations';
 import { sortTripHistory } from '@/lib/trip-history';
 import { selectTripsForExport } from '@/lib/export-csv';
 import { ExportCsv } from '@/components/ExportCsv';
+import { Avatar } from './Avatar';
+import { TRIP_STATUS_LABEL, formatRunDate } from './ScannerHome';
 
 interface TripHistoryProps {
   history: Trip[];
@@ -17,6 +19,8 @@ interface TripHistoryProps {
   onSelectTrip: (trip: Trip) => void;
   onBackToActive: () => void;
 }
+
+const UNKNOWN_PAYER: Participant = { id: 'unknown', name: 'Roommate', avatarEmoji: '', color: '', venmoHandle: '' };
 
 export function TripHistory({
   history,
@@ -47,48 +51,45 @@ export function TripHistory({
   const toggleDeselected = (tripId: string) =>
     setDeselectedIds((prev) => (prev.includes(tripId) ? prev.filter((id) => id !== tripId) : [...prev, tripId]));
 
-  const linkButtonClass =
-    'text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer';
+  const linkButtonClass = 'rounded-md text-sm font-medium text-slate-600 hover:text-slate-900 cursor-pointer';
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <button
-            onClick={onBackToActive}
-            className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 mb-1 cursor-pointer"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> Back
-          </button>
-          <h1 className="text-2xl font-black text-slate-900 dark:text-white">Trip History Archive</h1>
-          <p className="text-xs text-slate-500">
-            View all scanned grocery runs, active claiming sessions, and settlements.
-          </p>
-        </div>
+    <div className="mx-auto max-w-4xl px-4 py-8">
+      <div className="mb-6">
+        <button
+          type="button"
+          onClick={onBackToActive}
+          className="mb-1 flex items-center gap-1 rounded-md text-sm font-medium text-slate-600 hover:text-slate-900 cursor-pointer"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Back
+        </button>
+        <h1 className="text-2xl font-semibold text-slate-900">Trip history</h1>
+        <p className="text-sm text-slate-500">
+          {sortedHistory.length
+            ? `${sortedHistory.length} ${sortedHistory.length === 1 ? 'run' : 'runs'}, newest first.`
+            : 'Every grocery run you scan is kept here.'}
+        </p>
       </div>
 
       <ExportCsv history={exportTrips} household={household} participantId={activeParticipantId} />
 
       {sortedHistory.length === 0 ? (
-        <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-xs dark:border-slate-800 dark:bg-slate-900">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500 mb-3">
-            <ShoppingBag className="h-7 w-7" />
-          </div>
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white">No Scanned Trips Yet</h3>
-          <p className="mt-1 text-xs text-slate-500">
-            Once you scan or upload receipts, they will appear here immediately.
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
+          <h2 className="text-base font-medium text-slate-900">No runs yet</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Scan a receipt or open a sample, and it shows up here.
           </p>
         </div>
       ) : (
         <>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
-            <span className="text-xs text-slate-500">
-              {exportTrips.length} of {visibleHistory.length} trips checked for export
-              <span className="mx-1.5">·</span>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1 text-sm text-slate-500">
+            <span>
+              {exportTrips.length} of {visibleHistory.length} runs checked for export
+              <span className="mx-1.5" aria-hidden="true">·</span>
               <button type="button" onClick={() => setDeselectedIds([])} className={linkButtonClass}>
                 Select all
               </button>
-              <span className="mx-1.5">·</span>
+              <span className="mx-1.5" aria-hidden="true">·</span>
               <button
                 type="button"
                 onClick={() => setDeselectedIds(visibleHistory.map((trip) => trip.id))}
@@ -99,29 +100,24 @@ export function TripHistory({
             </span>
             {hiddenCount > 0 && (
               <button type="button" onClick={() => setShowHidden((v) => !v)} className={linkButtonClass}>
-                {showHidden ? 'Hide hidden trips' : `Show ${hiddenCount} hidden ${hiddenCount === 1 ? 'trip' : 'trips'}`}
+                {showHidden ? 'Hide hidden runs' : `Show ${hiddenCount} hidden ${hiddenCount === 1 ? 'run' : 'runs'}`}
               </button>
             )}
           </div>
 
-          <div className="space-y-3">
-            {listedHistory.length === 0 && (
-              <p className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-xs text-slate-500 dark:border-slate-700">
-                All trips are hidden.
-              </p>
-            )}
+          {listedHistory.length === 0 && (
+            <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+              All runs are hidden.
+            </p>
+          )}
+          <ul className="space-y-3">
             {listedHistory.map((trip) => {
               const isHidden = hiddenSet.has(trip.id);
-              const storeLabel = trip.storeName || 'Grocery Store';
+              const storeLabel = trip.storeName || 'Grocery store';
+              const dateLabel = trip.date ? formatRunDate(trip.date) : 'unknown date';
               const payer =
                 household.participants.find((p) => p.id === trip.payerId) ||
-                household.participants[0] || {
-                  id: trip.payerId || 'unknown',
-                  name: 'Roommate',
-                  avatarEmoji: '🛒',
-                  color: '#2563EB',
-                  venmoHandle: '',
-                };
+                household.participants[0] || { ...UNKNOWN_PAYER, id: trip.payerId || 'unknown' };
               const summary = calculateTripSettlement(trip, household);
               const totalBill = typeof summary.totalBill === 'number' && !Number.isNaN(summary.totalBill)
                 ? summary.totalBill
@@ -129,96 +125,61 @@ export function TripHistory({
               const itemsCount = Array.isArray(trip.items) ? trip.items.length : 0;
 
               return (
-                <div
+                <li
                   key={trip.id}
-                  onClick={() => onSelectTrip(trip)}
-                  className={`group flex items-center justify-between gap-2.5 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer sm:gap-3.5 sm:p-4 dark:border-slate-800 dark:bg-slate-900 ${
-                    isHidden ? 'opacity-50' : ''
-                  }`}
+                  className={`flex items-center gap-2 rounded-2xl border border-slate-200 bg-white pl-3 pr-1.5 transition-colors hover:border-slate-400 ${isHidden ? 'opacity-60' : ''}`}
                 >
-                  <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3.5">
-                    {!isHidden && (
-                      <input
-                        type="checkbox"
-                        aria-label={`Include ${storeLabel} on ${trip.date || 'unknown date'} in export`}
-                        checked={!deselectedIds.includes(trip.id)}
-                        onChange={() => toggleDeselected(trip.id)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="h-5 w-5 shrink-0 cursor-pointer accent-emerald-600"
-                      />
-                    )}
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 text-lg font-bold sm:h-11 sm:w-11 sm:text-xl dark:bg-emerald-950 dark:text-emerald-300">
-                      {payer.avatarEmoji}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <h3 className="min-w-0 break-words text-sm font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 transition-colors">
-                          {storeLabel}
-                        </h3>
-                        {isHidden ? (
-                          <span className="whitespace-nowrap rounded-mdbg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
-                            Hidden
-                          </span>
-                        ) : trip.status === 'settled' ? (
-                          <span className="whitespace-nowrap rounded-mdbg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                            Settled
-                          </span>
-                        ) : trip.status === 'review' ? (
-                          <span className="whitespace-nowrap rounded-mdbg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                            In Review
-                          </span>
-                        ) : (
-                          <span className="whitespace-nowrap rounded-mdbg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                            Claiming Active
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
-                        <span className="flex items-center gap-1 whitespace-nowrap">
-                          <Calendar className="h-3 w-3" /> {trip.date || 'Recent Date'}
+                  {!isHidden && (
+                    <input
+                      type="checkbox"
+                      aria-label={`Include ${storeLabel} on ${dateLabel} in export`}
+                      checked={!deselectedIds.includes(trip.id)}
+                      onChange={() => toggleDeselected(trip.id)}
+                      className="h-4 w-4 shrink-0 cursor-pointer accent-primary-600"
+                    />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onSelectTrip(trip)}
+                    className="group flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl py-4 pl-1 text-left cursor-pointer"
+                  >
+                    <span className="flex min-w-0 items-center gap-3">
+                      <Avatar participant={payer} size="lg" />
+                      <span className="min-w-0">
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="text-base font-medium text-slate-900">{storeLabel}</span>
+                          {isHidden ? (
+                            <span className="status-pill status-pill-settled">Hidden</span>
+                          ) : (
+                            <span className={`status-pill status-pill-${trip.status}`}>{TRIP_STATUS_LABEL[trip.status] ?? trip.status}</span>
+                          )}
                         </span>
-                        <span aria-hidden="true" className="hidden sm:inline">•</span>
-                        <span className="whitespace-nowrap">Paid by {payer.name}</span>
-                        <span aria-hidden="true" className="hidden sm:inline">•</span>
-                        <span className="whitespace-nowrap">
-                          {itemsCount} {itemsCount === 1 ? 'item' : 'items'}
+                        <span className="mt-0.5 block text-sm text-slate-500">
+                          {trip.date ? formatRunDate(trip.date) : '–'} · {payer.name} paid · {itemsCount} {itemsCount === 1 ? 'item' : 'items'}
                         </span>
-                      </div>
-                    </div>
-                  </div>
+                      </span>
+                    </span>
 
-                  {/* Stacked on phones so the total and buttons fit without sideways scrolling. */}
-                  <div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
-                    <div className="text-right">
-                      <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        Total
-                      </span>
-                      <span className="text-base font-black text-slate-900 dark:text-white">
-                        ${totalBill.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1 sm:gap-3">
-                      {onToggleHidden && (
-                        <button
-                          type="button"
-                          aria-label={`${isHidden ? 'Unhide' : 'Hide'} ${storeLabel} on ${trip.date || 'unknown date'}`}
-                          title={isHidden ? 'Unhide trip' : 'Hide trip (also removes it from exports)'}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onToggleHidden(trip.id);
-                          }}
-                          className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 cursor-pointer"
-                        >
-                          {isHidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                        </button>
-                      )}
-                      <ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all" />
-                    </div>
-                  </div>
-                </div>
+                    <span className="flex flex-none items-center gap-2">
+                      <span className="text-lg font-semibold text-slate-900 num">${totalBill.toFixed(2)}</span>
+                      <ChevronRight className="h-4 w-4 text-slate-500 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                    </span>
+                  </button>
+                  {onToggleHidden && (
+                    <button
+                      type="button"
+                      aria-label={`${isHidden ? 'Unhide' : 'Hide'} ${storeLabel} on ${dateLabel}`}
+                      title={isHidden ? 'Unhide run' : 'Hide run (also leaves it out of exports)'}
+                      onClick={() => onToggleHidden(trip.id)}
+                      className="shrink-0 rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
+                    >
+                      {isHidden ? <Eye className="h-4 w-4" aria-hidden="true" /> : <EyeOff className="h-4 w-4" aria-hidden="true" />}
+                    </button>
+                  )}
+                </li>
               );
             })}
-          </div>
+          </ul>
         </>
       )}
     </div>

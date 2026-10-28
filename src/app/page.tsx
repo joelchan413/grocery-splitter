@@ -91,6 +91,16 @@ export default function Home() {
     onSyncError: setSaveError,
   });
 
+  // A saved roommate who has since been removed from the household falls back to the first roommate.
+  const currentParticipantId = household.participants.some((p) => p.id === activeParticipantId)
+    ? activeParticipantId
+    : household.participants[0]?.id ?? activeParticipantId;
+
+  // Each screen opens at its top rather than at the previous screen's scroll position.
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [view]);
+
   // Keep a local copy so hidden trips stay out of exports if the server is unreachable.
   useEffect(() => {
     if (isHydrated) saveHiddenTripIds(hiddenTripIds);
@@ -321,6 +331,18 @@ export default function Home() {
     }
   };
 
+  const handleOpenTrip = (selected: Trip) => {
+    setActiveTrip(selected);
+    saveActiveTrip(selected);
+    if (selected.status === 'review') {
+      setView('review');
+    } else if (selected.status === 'settled') {
+      setView('settlement');
+    } else {
+      setView('claiming');
+    }
+  };
+
   const handleOpenHistory = async () => {
     setView('history');
     fetchHiddenTripIds().then((ids) => {
@@ -344,17 +366,17 @@ export default function Home() {
 
   if (!isHydrated) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
+      <div className="flex min-h-dvh items-center justify-center bg-slate-50" role="status">
         <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent mx-auto mb-2" />
-          <p className="text-xs text-slate-400 font-medium">Loading GrocerySplit...</p>
+          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-slate-900 border-t-transparent motion-reduce:animate-none" aria-hidden="true" />
+          <p className="text-sm text-slate-500">Loading GrocerySplit…</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
+    <div className="app-shell">
       <Header
         household={household}
         activeView={view}
@@ -367,12 +389,12 @@ export default function Home() {
       />
 
       {saveError && (
-        <div role="alert" className="bg-red-50 px-4 py-3 text-center text-sm text-red-800 dark:bg-red-950 dark:text-red-200">
+        <div role="alert" className="app-main bg-red-50 px-4 py-3 text-center text-sm text-red-800">
           {saveError}
         </div>
       )}
 
-      <main className="flex-1">
+      <main className="app-main">
         {activeTrip && (view === 'review' || view === 'claiming' || view === 'settlement') && (
           <ReceiptPhotos key={activeTrip.id} trip={activeTrip} />
         )}
@@ -381,6 +403,9 @@ export default function Home() {
           <ReceiptScanner
             household={household}
             onTripScanned={handleTripScanned}
+            history={tripHistory}
+            onOpenTrip={handleOpenTrip}
+            onOpenHistory={handleOpenHistory}
           />
         )}
 
@@ -398,7 +423,7 @@ export default function Home() {
           <ClaimingBoard
             trip={activeTrip}
             household={household}
-            activeParticipantId={activeParticipantId}
+            activeParticipantId={currentParticipantId}
             onSelectParticipant={handleSelectParticipant}
             onUpdateTrip={handleUpdateTrip}
             onViewSettlement={() => setView('settlement')}
@@ -419,20 +444,10 @@ export default function Home() {
           <TripHistory
             history={tripHistory}
             household={household}
-            activeParticipantId={activeParticipantId}
+            activeParticipantId={currentParticipantId}
             hiddenTripIds={hiddenTripIds}
             onToggleHidden={handleToggleHiddenTrip}
-            onSelectTrip={(selected) => {
-              setActiveTrip(selected);
-              saveActiveTrip(selected);
-              if (selected.status === 'review') {
-                setView('review');
-              } else if (selected.status === 'settled') {
-                setView('settlement');
-              } else {
-                setView('claiming');
-              }
-            }}
+            onSelectTrip={handleOpenTrip}
             onBackToActive={() => {
               if (activeTrip) {
                 setView(
@@ -451,13 +466,13 @@ export default function Home() {
       </main>
 
       {/* Household & Settings Modals */}
-      <HouseholdModal
+      {isHouseholdModalOpen && <HouseholdModal
         isOpen={isHouseholdModalOpen}
         household={household}
         isFirstTime={isFirstTimeSetup}
         onClose={() => setIsHouseholdModalOpen(false)}
         onSave={handleUpdateHousehold}
-      />
+      />}
 
       <SettingsModal
         isOpen={isSettingsModalOpen}

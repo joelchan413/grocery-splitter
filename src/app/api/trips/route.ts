@@ -13,8 +13,8 @@ export async function GET(req: NextRequest) {
 
     const activeTrip = getActiveTrip();
     return NextResponse.json({ activeTrip });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: (err instanceof Error ? err.message : 'Unexpected server error') }, { status: 500 });
   }
 }
 
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     }
     const saved = saveTrip(trip);
     return NextResponse.json(saved);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: (err instanceof Error ? err.message : 'Unexpected server error') }, { status: 500 });
   }
 }

@@ -5,8 +5,8 @@ export async function GET() {
   try {
     const household = getHousehold();
     return NextResponse.json(household);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: (err instanceof Error ? err.message : 'Unexpected server error') }, { status: 500 });
   }
 }
 
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     }
     const updated = updateHousehold(body);
     return NextResponse.json(updated);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: (err instanceof Error ? err.message : 'Unexpected server error') }, { status: 500 });
   }
 }

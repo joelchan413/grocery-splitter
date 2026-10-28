@@ -100,9 +100,8 @@ export function exportTripsToCsv(
 
     const summary = calculateTripSettlement(trip, household);
     const me = summary.participants.find((p) => p.participantId === participantId);
-    if (!me || (!me.isPayer && me.totalShare <= 0)) continue;
+    if (!me || (!me.isPayer && me.ownShare <= 0)) continue;
 
-    const payer = household.participants.find((p) => p.id === trip.payerId);
     rows.push({
       date: trip.date,
       id: trip.id,
@@ -114,8 +113,8 @@ export function exportTripsToCsv(
         '', // food_subtotal: no food/non-food tag in the schema
         '', // non_food_subtotal: no food/non-food tag, tip or fee in the schema
         formatMoney(trip.taxTotal),
-        payer?.name ?? '',
-        formatMoney(me.totalShare),
+        summary.payer.name,
+        formatMoney(me.ownShare),
         '', // split_method: not stored
         '', // venmo_status: Venmo payments are not recorded
         '', // notes: not stored

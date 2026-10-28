@@ -55,8 +55,9 @@ export interface ParticipantSettlement {
   basketDiscountShare: number;
   taxableSubtotal: number;
   taxAttributed: number;
+  itemsShare: number; // Own plus shared items, rounded once
+  ownShare: number; // This person's share of the bill; for the payer, the bill minus what everyone else owes
   netOwed: number; // Amount owed to payer (0 for payer itself)
-  totalShare: number; // This participant's full share of the receipt, payer included
   claimedItems: {
     itemId: string;
     itemName: string;

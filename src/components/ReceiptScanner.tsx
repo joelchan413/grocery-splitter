@@ -2,22 +2,25 @@
 
 /* eslint-disable @next/next/no-img-element -- Local receipt previews use data URLs with unknown dimensions. */
 import { useState, useRef, type ChangeEvent } from 'react';
-import { Camera, Upload, X, AlertCircle, Loader2, Check, ArrowRight } from 'lucide-react';
+import { Camera, Upload, X, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
 import type { Household, Trip } from '@/types';
 import { SAMPLE_RECEIPTS, type ParsedReceiptData } from '@/lib/receipts';
 import { readReceiptResponse } from '@/lib/receipt-response';
-import { AnthropicScanner } from './designs/AnthropicScanner';
-import { TasteScanner } from './designs/TasteScanner';
-import type { DesignVariant } from './designs/DesignSwitcher';
+import { ScannerHome } from './ScannerHome';
+import { Avatar, personStyle } from './Avatar';
 
 interface ReceiptScannerProps {
   household: Household;
   onTripScanned: (newTrip: Trip) => void;
-  design: DesignVariant;
+  history?: Trip[];
+  onOpenTrip?: (trip: Trip) => void;
+  onOpenHistory?: () => void;
 }
 
-export function ReceiptScanner({ household, onTripScanned, design }: ReceiptScannerProps) {
+export function ReceiptScanner({ household, onTripScanned, history, onOpenTrip, onOpenHistory }: ReceiptScannerProps) {
   const [selectedPayerId, setSelectedPayerId] = useState(household.participants[0]?.id || 'p1');
+  // Falls back to the first roommate if the chosen payer is removed from the household.
+  const payerId = household.participants.some(p => p.id === selectedPayerId) ? selectedPayerId : household.participants[0]?.id || selectedPayerId;
   const [images, setImages] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -48,7 +51,7 @@ export function ReceiptScanner({ household, onTripScanned, design }: ReceiptScan
       householdId: household.id,
       storeName: parsed.storeName || 'Grocery Store',
       date: parsed.date || new Date().toISOString().split('T')[0],
-      payerId: selectedPayerId,
+      payerId,
       items: parsed.items.map((item, index) => ({ ...item, id: item.id || `item-${now}-${index}` })),
       taxTotal: parsed.taxTotal || 0,
       basketDiscount: parsed.basketDiscount || 0,
@@ -82,12 +85,11 @@ export function ReceiptScanner({ household, onTripScanned, design }: ReceiptScan
     <div className="scan-people" role="group" aria-label="Receipt payer">
       {household.participants.map(person => <button
         key={person.id} type="button" disabled={isProcessing}
-        className="scan-person" aria-pressed={selectedPayerId === person.id}
+        className="scan-person person-tint" style={personStyle(person)} aria-pressed={payerId === person.id}
         onClick={() => setSelectedPayerId(person.id)}
       >
-        <span className="scan-avatar" aria-hidden="true">{design === 'taste' ? person.name.slice(0, 1) : person.avatarEmoji}</span>
-        <span className="scan-person-name">{person.name}<small>{selectedPayerId === person.id ? 'Paid the bill' : person.venmoHandle || 'Roommate'}</small></span>
-        {selectedPayerId === person.id && <Check className="scan-person-check" size={16} aria-hidden="true" />}
+        <Avatar participant={person} />
+        <span className="scan-person-name">{person.name}<small>{payerId === person.id ? 'Paid the bill' : person.venmoHandle || 'Roommate'}</small></span>
       </button>)}
     </div>
   </>;
@@ -124,6 +126,6 @@ export function ReceiptScanner({ household, onTripScanned, design }: ReceiptScan
     </div>
   </>;
   const error = errorMessage && <div role="alert" className="scan-error"><AlertCircle size={18} aria-hidden="true" /><span>{errorMessage}</span></div>;
-  const Presentation = design === 'anthropic' ? AnthropicScanner : TasteScanner;
-  return <Presentation payer={payer} upload={upload} samples={samples} error={error} onChoosePhotos={() => fileInputRef.current?.click()} />;
+  return <ScannerHome payer={payer} upload={upload} samples={samples} error={error}
+    household={household} history={history} onOpenTrip={onOpenTrip} onOpenHistory={onOpenHistory} />;
 }

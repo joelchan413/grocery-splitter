@@ -13,16 +13,16 @@ test.describe('GrocerySplit Complete User Flow and UI Audit', () => {
     // 1. Visit homepage (First-time setup wizard opens automatically on fresh load)
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.goto('/');
-    await expect(page.getByText('Welcome! Set Up Your Household')).toBeVisible();
-    await expect(page.getByText('Roommates (4)')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Set up your household' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Roommates (4)' })).toBeVisible();
 
     // Complete Initial Setup Wizard
-    await page.getByRole('button', { name: /Save & Start Splitting/i }).click();
-    await expect(page.getByRole('heading', { name: 'Good groceries. Fair shares.' })).toBeVisible();
+    await page.getByRole('button', { name: /Save and start splitting/i }).click();
+    await expect(page.getByRole('heading', { name: 'New grocery run' })).toBeVisible();
 
     // Verify Household settings can be reopened anytime from Header
     await page.getByRole('button', { name: /Apartment 4B/i }).click();
-    await expect(page.getByText('Household Setup')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Household', exact: true })).toBeVisible();
     await page.getByRole('button', { name: /Cancel/i }).click();
 
     await page.route('**/api/scan-receipt', (route) => route.fulfill({ json: {
@@ -39,26 +39,26 @@ test.describe('GrocerySplit Complete User Flow and UI Audit', () => {
     await page.getByRole('button', { name: /Trader Joe's.*Open sample/i }).click();
 
     // 3. Verify Review Screen
-    await expect(page.getByText('Verify Receipt Items')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Check receipt items' })).toBeVisible();
     await expect(page.locator('input[value="Trader Joe\'s"]')).toBeVisible();
-    await expect(page.getByText(/Line Items \(/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^Items \(\d+\)$/ })).toBeVisible();
 
     // Toggle tax on an item
-    const exemptBadge = page.getByRole('button', { name: /Exempt/i }).first();
+    const exemptBadge = page.getByRole('button', { name: 'Not taxed', exact: true }).first();
     await exemptBadge.click();
 
     // Click "Open for Roommate Claims"
     await page.getByRole('button', { name: /Open for Roommate Claims/i }).click();
 
     // 4. Claiming Board Flow
-    await expect(page.getByText(/Select Who is Claiming/i)).toBeVisible();
-    await expect(page.getByText(/Roommate Progress/i)).toBeVisible();
+    await expect(page.getByText(/Who's claiming\?/i)).toBeVisible();
+    await expect(page.getByText('Done claiming', { exact: true })).toBeVisible();
 
     // Verify Share Live Modal
     await page.getByRole('button', { name: /Share Live/i }).click();
-    await expect(page.getByRole('heading', { name: /Share Live Trip/i })).toBeVisible();
-    await expect(page.getByText(/Room Link/i)).toBeVisible();
-    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Share this trip' })).toBeVisible();
+    await expect(page.getByLabel('Trip link')).toHaveValue(/\?trip=/);
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
 
     // Joel (Active by default) claims first item
     await page.getByRole('button', { name: /^Claim$/i }).first().click();
@@ -77,7 +77,7 @@ test.describe('GrocerySplit Complete User Flow and UI Audit', () => {
 
     // Alex marks done
     await page.getByRole('button', { name: /I'm Done Claiming/i }).click();
-    await expect(page.getByText(/Alex: Ready ✓/i)).toBeVisible();
+    await expect(page.getByText(/Alex is done/i)).toBeVisible();
 
     // Switch to Sam
     await page.getByRole('button', { name: /Sam/i }).first().click();
@@ -89,26 +89,26 @@ test.describe('GrocerySplit Complete User Flow and UI Audit', () => {
     await page.getByRole('button', { name: /I'm Done Claiming/i }).click();
 
     // 5. Navigate to Settlement View
-    await page.getByRole('button', { name: /View Final Breakdown|View Balances/i }).first().click();
-    await expect(page.getByText(/Trip Settlement Breakdown/i)).toBeVisible();
-    await expect(page.getByText(/Total to Reimburse/i)).toBeVisible();
+    await page.getByRole('button', { name: /View breakdown|View balances/i }).first().click();
+    await expect(page.getByRole('heading', { name: "Trader Joe's", level: 1 })).toBeVisible();
+    await expect(page.getByText(/gets back/i)).toBeVisible();
 
     // Verify Venmo buttons exist for non-payer roommates
     const venmoButtons = page.getByRole('link', { name: /Venmo/i });
     expect(await venmoButtons.count()).toBeGreaterThanOrEqual(1);
 
     // Test Copy Summary
-    await page.getByRole('button', { name: /Copy Summary for Group Chat/i }).click();
-    await expect(page.getByText(/Copied to Clipboard!/i)).toBeVisible();
+    await page.getByRole('button', { name: /Copy summary for the group chat/i }).click();
+    await expect(page.getByText('Summary copied')).toBeVisible();
 
     // 6. Finish and Archive Trip
-    await page.getByRole('button', { name: /Finish & Archive/i }).click();
-    await expect(page.getByText(/Trip History Archive/i)).toBeVisible();
+    await page.getByRole('button', { name: /Finish and archive/i }).click();
+    await expect(page.getByRole('heading', { name: 'Trip history' })).toBeVisible();
     await expect(page.getByText("Trader Joe's").first()).toBeVisible();
 
     // Click archived trip to inspect historical view
     await page.getByText("Trader Joe's").first().click();
-    await expect(page.getByText(/Trip Settlement Breakdown/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: "Trader Joe's", level: 1 })).toBeVisible();
 
     // Check console errors
     const fatalErrors = consoleErrors.filter(

@@ -8,7 +8,7 @@ export const DEFAULT_HOUSEHOLD: Household = {
     { id: 'p1', name: 'Joel', avatarEmoji: '🛒', color: '#2563EB', venmoHandle: '@joel' },
     { id: 'p2', name: 'Alex', avatarEmoji: '🥑', color: '#059669', venmoHandle: '@alex' },
     { id: 'p3', name: 'Sam', avatarEmoji: '🧀', color: '#D97706', venmoHandle: '@sam' },
-    { id: 'p4', name: 'Jordan', avatarEmoji: '☕', color: '#7C3AED', venmoHandle: '@jordan' },
+    { id: 'p4', name: 'Jordan', avatarEmoji: '☕', color: '#DB2777', venmoHandle: '@jordan' },
   ],
 };
 

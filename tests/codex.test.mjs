@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import path from 'node:path';
 import test from 'node:test';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
@@ -11,13 +10,13 @@ function load(sourcePath, { execFile, env = {} } = {}) {
   const compiled = ts.transpileModule(fs.readFileSync(sourcePath, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
-  const module = { exports: {} };
+  const sandboxModule = { exports: {} };
   vm.runInNewContext(compiled, {
-    module, exports: module.exports, Buffer, console,
+    module: sandboxModule, exports: sandboxModule.exports, Buffer, console,
     process: { env },
     require: (name) => name === 'server-only' ? {} : name === 'node:child_process' ? { execFile } : nodeRequire(name),
   });
-  return module.exports;
+  return sandboxModule.exports;
 }
 
 const image = `data:image/png;base64,${Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0]).toString('base64')}`;

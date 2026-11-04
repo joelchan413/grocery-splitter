@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   loadHousehold,
   saveHousehold,
@@ -19,6 +19,7 @@ import {
   setHouseholdInitialized,
   DEFAULT_HOUSEHOLD,
 } from '@/lib/storage';
+import { loadTripDetails } from '@/lib/trip-history';
 import { Household, Trip } from '@/types';
 import { useTripSync } from '@/hooks/useTripSync';
 import { Header } from '@/components/Header';
@@ -60,7 +61,21 @@ export default function Home() {
   const [tripHistory, setTripHistory] = useState<Trip[]>([]);
   const [hiddenTripIds, setHiddenTripIds] = useState<string[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [historyRefreshing, setHistoryRefreshing] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [openingTrip, setOpeningTrip] = useState(false);
+  const openRequest = useRef(0);
+  const historyRequest = useRef(0);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  const navigate = useCallback((next: AppView) => {
+    openRequest.current++;
+    historyRequest.current++;
+    setOpeningTrip(false);
+    setHistoryRefreshing(false);
+    setHistoryError(null);
+    setView(next);
+  }, []);
 
   // Callback when server-side SSE sends an updated trip
   const handleTripUpdatedFromServer = useCallback((serverTrip: Trip) => {
@@ -90,6 +105,16 @@ export default function Home() {
     onTripUpdated: handleTripUpdatedFromServer,
     onSyncError: setSaveError,
   });
+
+  // A saved roommate who has since been removed from the household falls back to the first roommate.
+  const currentParticipantId = household.participants.some((p) => p.id === activeParticipantId)
+    ? activeParticipantId
+    : household.participants[0]?.id ?? activeParticipantId;
+
+  // Each screen opens at its top rather than at the previous screen's scroll position.
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [view]);
 
   // Keep a local copy so hidden trips stay out of exports if the server is unreachable.
   useEffect(() => {
@@ -125,7 +150,7 @@ export default function Home() {
             saveActiveTrip(serverTrip);
             addOrUpdateTripHistory(serverTrip);
             setTripHistory(loadTripHistory());
-            setView(serverTrip.status === 'review' ? 'review' : serverTrip.status === 'settled' ? 'settlement' : 'claiming');
+            navigate(serverTrip.status === 'review' ? 'review' : serverTrip.status === 'settled' ? 'settlement' : 'claiming');
 
             // Prompt roommate identification if first time on this device
             if (!localStorage.getItem('grocery_splitter_active_participant_v1')) {
@@ -146,11 +171,11 @@ export default function Home() {
         } catch {}
 
         if (savedTrip.status === 'review') {
-          setView('review');
+          navigate('review');
         } else if (savedTrip.status === 'settled') {
-          setView('settlement');
+          navigate('settlement');
         } else {
-          setView('claiming');
+          navigate('claiming');
         }
       }
 
@@ -163,7 +188,7 @@ export default function Home() {
       try {
         const [hhRes, histRes, serverHidden] = await Promise.all([
           fetch('/api/household'),
-          fetch('/api/trips?view=history'),
+          fetch('/api/trips?view=history&summary=1'),
           fetchHiddenTripIds(),
         ]);
         if (serverHidden) setHiddenTripIds(serverHidden);
@@ -187,7 +212,7 @@ export default function Home() {
     }
 
     init();
-  }, []);
+  }, [navigate]);
 
   // Update household locally and on server
   const handleUpdateHousehold = async (updated: Household) => {
@@ -261,7 +286,7 @@ export default function Home() {
     setActiveTrip(null);
     saveActiveTrip(null);
     window.history.replaceState({}, '', window.location.pathname);
-    setView('scanner');
+    navigate('scanner');
   };
 
   const handleTripScanned = async (newTrip: Trip) => {
@@ -269,7 +294,7 @@ export default function Home() {
     saveActiveTrip(newTrip);
     addOrUpdateTripHistory(newTrip);
     setTripHistory(loadTripHistory());
-    setView('review');
+    navigate('review');
 
     // Save to server database immediately
     try {
@@ -290,7 +315,7 @@ export default function Home() {
     if (updated) {
       handleUpdateTrip(updated);
     }
-    setView('claiming');
+    navigate('claiming');
   };
 
   const handleArchiveCurrentTrip = async () => {
@@ -305,7 +330,7 @@ export default function Home() {
     setActiveTrip(null);
     saveActiveTrip(null);
     window.history.replaceState({}, '', window.location.pathname);
-    setView('history');
+    navigate('history');
 
     try {
       const response = await fetch(`/api/trips/${encodeURIComponent(settledTrip.id)}`, {
@@ -321,40 +346,63 @@ export default function Home() {
     }
   };
 
+  const handleOpenTrip = async (selected: Trip) => {
+    const request = ++openRequest.current;
+    setOpeningTrip(true);
+    setHistoryError(null);
+    try {
+      const trip = await loadTripDetails(selected);
+      if (request !== openRequest.current) return;
+      setActiveTrip(trip);
+      saveActiveTrip(trip);
+      navigate(trip.status === 'review' ? 'review' : trip.status === 'settled' ? 'settlement' : 'claiming');
+    } catch {
+      if (request === openRequest.current) setHistoryError('Could not open this trip. Please try again.');
+    } finally {
+      if (request === openRequest.current) setOpeningTrip(false);
+    }
+  };
+
   const handleOpenHistory = async () => {
-    setView('history');
+    navigate('history');
+    const request = ++historyRequest.current;
+    setHistoryRefreshing(true);
+    setHistoryError(null);
     fetchHiddenTripIds().then((ids) => {
       if (ids) setHiddenTripIds(ids);
     });
     try {
-      const res = await fetch('/api/trips?view=history');
-      if (res.ok) {
-        const serverHistory: Trip[] = await res.json();
-        if (Array.isArray(serverHistory)) {
-          const currentLocal = loadTripHistory();
-          const merged = mergeTripHistory(currentLocal, serverHistory);
-          setTripHistory(merged);
-          saveTripHistory(merged);
-        }
+      const res = await fetch('/api/trips?view=history&summary=1');
+      if (!res.ok) throw new Error('History request failed');
+      const serverHistory: Trip[] = await res.json();
+      if (!Array.isArray(serverHistory)) throw new Error('Invalid history response');
+      if (request === historyRequest.current) {
+        const currentLocal = loadTripHistory();
+        const merged = mergeTripHistory(currentLocal, serverHistory);
+        setTripHistory(merged);
+        saveTripHistory(merged);
       }
     } catch (e) {
       console.error('Error fetching history:', e);
+      if (request === historyRequest.current) setHistoryError('Could not refresh history. Showing saved runs.');
+    } finally {
+      if (request === historyRequest.current) setHistoryRefreshing(false);
     }
   };
 
   if (!isHydrated) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
+      <div className="flex min-h-dvh items-center justify-center bg-slate-50" role="status">
         <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent mx-auto mb-2" />
-          <p className="text-xs text-slate-400 font-medium">Loading GrocerySplit...</p>
+          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-slate-900 border-t-transparent motion-reduce:animate-none" aria-hidden="true" />
+          <p className="text-sm text-slate-500">Loading GrocerySplit…</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
+    <div className="app-shell">
       <Header
         household={household}
         activeView={view}
@@ -367,12 +415,14 @@ export default function Home() {
       />
 
       {saveError && (
-        <div role="alert" className="bg-red-50 px-4 py-3 text-center text-sm text-red-800 dark:bg-red-950 dark:text-red-200">
+        <div role="alert" className="app-main bg-red-50 px-4 py-3 text-center text-sm text-red-800">
           {saveError}
         </div>
       )}
 
-      <main className="flex-1">
+      <main className="app-main">
+        {openingTrip && <p role="status" className="mx-auto max-w-4xl px-4 pt-4 text-sm text-slate-500">Opening trip…</p>}
+        {historyError && <p role="alert" className="mx-auto max-w-4xl px-4 pt-4 text-sm text-red-700">{historyError}</p>}
         {activeTrip && (view === 'review' || view === 'claiming' || view === 'settlement') && (
           <ReceiptPhotos key={activeTrip.id} trip={activeTrip} />
         )}
@@ -381,6 +431,9 @@ export default function Home() {
           <ReceiptScanner
             household={household}
             onTripScanned={handleTripScanned}
+            history={tripHistory}
+            onOpenTrip={handleOpenTrip}
+            onOpenHistory={handleOpenHistory}
           />
         )}
 
@@ -390,7 +443,7 @@ export default function Home() {
             household={household}
             onUpdateTrip={handleUpdateTrip}
             onConfirmAndProceed={handleConfirmReview}
-            onBackToScanner={() => setView('scanner')}
+            onBackToScanner={() => navigate('scanner')}
           />
         )}
 
@@ -398,11 +451,11 @@ export default function Home() {
           <ClaimingBoard
             trip={activeTrip}
             household={household}
-            activeParticipantId={activeParticipantId}
+            activeParticipantId={currentParticipantId}
             onSelectParticipant={handleSelectParticipant}
             onUpdateTrip={handleUpdateTrip}
-            onViewSettlement={() => setView('settlement')}
-            onBackToReview={() => setView('review')}
+            onViewSettlement={() => navigate('settlement')}
+            onBackToReview={() => navigate('review')}
           />
         )}
 
@@ -410,32 +463,23 @@ export default function Home() {
           <SettlementView
             trip={activeTrip}
             household={household}
-            onEditClaims={() => setView('claiming')}
+            onEditClaims={() => navigate('claiming')}
             onArchiveTrip={handleArchiveCurrentTrip}
           />
         )}
 
         {view === 'history' && (
           <TripHistory
+            refreshing={historyRefreshing}
             history={tripHistory}
             household={household}
-            activeParticipantId={activeParticipantId}
+            activeParticipantId={currentParticipantId}
             hiddenTripIds={hiddenTripIds}
             onToggleHidden={handleToggleHiddenTrip}
-            onSelectTrip={(selected) => {
-              setActiveTrip(selected);
-              saveActiveTrip(selected);
-              if (selected.status === 'review') {
-                setView('review');
-              } else if (selected.status === 'settled') {
-                setView('settlement');
-              } else {
-                setView('claiming');
-              }
-            }}
+            onSelectTrip={handleOpenTrip}
             onBackToActive={() => {
               if (activeTrip) {
-                setView(
+                navigate(
                   activeTrip.status === 'review'
                     ? 'review'
                     : activeTrip.status === 'settled'
@@ -443,7 +487,7 @@ export default function Home() {
                     : 'claiming'
                 );
               } else {
-                setView('scanner');
+                navigate('scanner');
               }
             }}
           />
@@ -451,13 +495,13 @@ export default function Home() {
       </main>
 
       {/* Household & Settings Modals */}
-      <HouseholdModal
+      {isHouseholdModalOpen && <HouseholdModal
         isOpen={isHouseholdModalOpen}
         household={household}
         isFirstTime={isFirstTimeSetup}
         onClose={() => setIsHouseholdModalOpen(false)}
         onSave={handleUpdateHousehold}
-      />
+      />}
 
       <SettingsModal
         isOpen={isSettingsModalOpen}

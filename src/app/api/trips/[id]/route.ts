@@ -12,8 +12,8 @@ export async function GET(
       return NextResponse.json({ error: 'Trip not found' }, { status: 404 });
     }
     return NextResponse.json(trip);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: (err instanceof Error ? err.message : 'Unexpected server error') }, { status: 500 });
   }
 }
 
@@ -24,13 +24,16 @@ export async function PATCH(
   try {
     const { id } = await params;
     const updates = await req.json();
+    if (updates.receiptImagesOmitted) {
+      return NextResponse.json({ error: 'Load the complete trip before saving' }, { status: 400 });
+    }
     const updated = updateTripPartial(id, updates);
     if (!updated) {
       return NextResponse.json({ error: 'Trip not found' }, { status: 404 });
     }
     return NextResponse.json(updated);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: (err instanceof Error ? err.message : 'Unexpected server error') }, { status: 500 });
   }
 }
 
@@ -46,7 +49,7 @@ export async function POST(
       return NextResponse.json(archived);
     }
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: (err instanceof Error ? err.message : 'Unexpected server error') }, { status: 500 });
   }
 }

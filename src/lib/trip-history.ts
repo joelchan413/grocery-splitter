@@ -19,3 +19,20 @@ export function sortTripHistory(history: readonly Trip[]): Trip[] {
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
 }
+
+/** Leaves the data needed for balances and CSV exports, without embedding receipt photos. */
+export function summarizeTrip(trip: Trip): Trip {
+  return { ...trip, receiptImages: [], receiptImagesOmitted: true };
+}
+
+/** Summaries are display-only; always retrieve the complete trip before editing or exporting photos. */
+export async function loadTripDetails(trip: Trip): Promise<Trip> {
+  if (!trip.receiptImagesOmitted) return trip;
+  const response = await fetch(`/api/trips/${encodeURIComponent(trip.id)}`, { cache: 'no-store' });
+  if (!response.ok) throw new Error('Could not load the trip. Please try again.');
+  const full: Trip = await response.json();
+  if (!full || full.id !== trip.id || full.receiptImagesOmitted || !Array.isArray(full.items) || (full.receiptImages != null && !Array.isArray(full.receiptImages))) {
+    throw new Error('Could not load the complete trip. Please try again.');
+  }
+  return { ...full, receiptImages: full.receiptImages ?? [] };
+}

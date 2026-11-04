@@ -15,24 +15,24 @@ export function ReceiptPhotos({ trip }: { trip: Trip }) {
     const store = trip.storeName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'receipt';
     return `${store}-${trip.date}-receipt-${index + 1}.${extension === 'jpeg' ? 'jpg' : extension}`;
   };
-  const actionClass = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 focus-visible:outline-2 focus-visible:outline-emerald-600 dark:text-emerald-300 dark:hover:bg-emerald-950';
+  const actionClass = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-primary-700 hover:bg-primary-50 focus-visible:outline-2 focus-visible:outline-primary-600';
 
   return (
-    <section aria-label="Saved receipt photos" className="mx-auto max-w-3xl px-4 pt-6">
-      <details className="rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        <summary className="cursor-pointer rounded-2xl px-4 py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-emerald-600">
+    <section aria-label="Saved receipt photos" className="mx-auto max-w-4xl px-4 pt-6">
+      <details className="rounded-2xl border border-slate-200 bg-white">
+        <summary className="cursor-pointer rounded-2xl px-4 py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-primary-600">
           Receipt photos ({images.length})
         </summary>
         {images.length === 0 ? (
-          <p className="px-4 pb-4 text-sm text-slate-500 dark:text-slate-400">No receipt photos were saved for this trip.</p>
+          <p className="px-4 pb-4 text-sm text-slate-500">No receipt photos were saved for this trip.</p>
         ) : (
           <div className="grid grid-cols-1 gap-4 px-4 pb-4 sm:grid-cols-3">
             {images.map((src, index) => (
-              <div key={index} className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+              <div key={index} className="overflow-hidden rounded-xl border border-slate-200">
                 <button
                   type="button"
                   aria-label={`View receipt photo ${index + 1}`}
-                  className="group block w-full cursor-pointer bg-slate-100 p-2 focus-visible:outline-2 focus-visible:outline-emerald-600 dark:bg-slate-800"
+                  className="group block w-full cursor-pointer bg-slate-100 p-2 focus-visible:outline-2 focus-visible:outline-primary-600"
                   onClick={() => {
                     setSelectedIndex(index);
                     setZoomed(false);
@@ -40,7 +40,7 @@ export function ReceiptPhotos({ trip }: { trip: Trip }) {
                   }}
                 >
                   <img src={src} alt={`Receipt photo ${index + 1} from ${trip.storeName}`} loading="lazy" className="h-40 w-full object-contain" />
-                  <span className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 group-hover:text-emerald-700 dark:text-slate-300">
+                  <span className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 group-hover:text-primary-700">
                     <ScanSearch className="h-4 w-4" aria-hidden="true" /> View photo {index + 1}
                   </span>
                 </button>
@@ -56,10 +56,10 @@ export function ReceiptPhotos({ trip }: { trip: Trip }) {
       {images.length > 0 && <dialog
         ref={dialogRef}
         aria-labelledby="receipt-photo-title"
-        className="fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-4xl overflow-auto rounded-2xl border border-slate-200 bg-white p-0 text-slate-900 shadow-xl backdrop:bg-black/60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+        className="fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-4xl overflow-auto rounded-2xl border border-slate-200 bg-white p-0 text-slate-900 backdrop:bg-black/60"
       >
-        <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-          <h2 id="receipt-photo-title" className="text-sm font-bold">Receipt photo {selectedIndex + 1} of {images.length}</h2>
+        <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white p-3">
+          <h2 id="receipt-photo-title" className="text-sm font-semibold">Receipt photo {selectedIndex + 1} of {images.length}</h2>
           <div className="flex items-center gap-1">
             <button type="button" className={actionClass} onClick={() => setZoomed(!zoomed)} aria-pressed={zoomed}>
               {zoomed ? <ZoomOut className="h-4 w-4" aria-hidden="true" /> : <ZoomIn className="h-4 w-4" aria-hidden="true" />}
@@ -68,12 +68,12 @@ export function ReceiptPhotos({ trip }: { trip: Trip }) {
             <a href={images[selectedIndex]} download={filename(selectedIndex)} className={actionClass} aria-label={`Download receipt photo ${selectedIndex + 1}`}>
               <Download className="h-4 w-4" aria-hidden="true" /> Download
             </a>
-            <button type="button" onClick={() => dialogRef.current?.close()} aria-label="Close receipt photo" className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-emerald-600 dark:hover:bg-slate-800">
+            <button type="button" onClick={() => dialogRef.current?.close()} aria-label="Close receipt photo" className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-primary-600">
               <X className="h-5 w-5" aria-hidden="true" />
             </button>
           </div>
         </div>
-        <div className="overflow-auto bg-slate-100 p-3 dark:bg-slate-950">
+        <div className="overflow-auto bg-slate-100 p-3">
           {images[selectedIndex] && <img src={images[selectedIndex]} alt={`Receipt photo ${selectedIndex + 1} from ${trip.storeName}`} className={`mx-auto h-auto ${zoomed ? 'max-w-none' : 'max-w-full'}`} />}
         </div>
       </dialog>}

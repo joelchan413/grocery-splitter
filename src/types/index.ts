@@ -38,6 +38,7 @@ export interface Trip {
   taxTotal: number;
   basketDiscount: number;
   receiptImages: string[];
+  receiptImagesOmitted?: boolean; // History summaries must be hydrated before editing or exporting photos
   claims: Record<string, ItemClaims>; // lineItemId -> ItemClaims
   readyParticipantIds: string[];
   status: 'review' | 'claiming' | 'settled';

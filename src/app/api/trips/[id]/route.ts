@@ -24,6 +24,9 @@ export async function PATCH(
   try {
     const { id } = await params;
     const updates = await req.json();
+    if (updates.receiptImagesOmitted) {
+      return NextResponse.json({ error: 'Load the complete trip before saving' }, { status: 400 });
+    }
     const updated = updateTripPartial(id, updates);
     if (!updated) {
       return NextResponse.json({ error: 'Trip not found' }, { status: 404 });

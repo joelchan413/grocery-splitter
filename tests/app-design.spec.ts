@@ -180,3 +180,85 @@ test('the share dialog draws its QR code locally and never sends the trip link e
   await expect(dialog).toBeHidden();
   expect(outside).toEqual([]);
 });
+
+
+test('history refresh shows progress, transfers no photos, and loads the complete trip before opening', async ({ page }) => {
+  const full: Trip = {
+    id: 'history-photo', householdId: DEFAULT_HOUSEHOLD.id, storeName: 'Photo market',
+    date: new Date().toISOString().slice(0, 10), payerId: 'p1', items: SAMPLE_RECEIPTS[0].data.items,
+    taxTotal: 0, basketDiscount: 0, receiptImages: [`data:image/png;base64,${receiptPhoto.buffer.toString('base64')}`],
+    claims: {}, readyParticipantIds: [], status: 'settled', createdAt: new Date().toISOString(),
+  };
+  const summary = { ...full, receiptImages: [], receiptImagesOmitted: true };
+  let historyCalls = 0;
+  let detailCalls = 0;
+  let release!: () => void;
+  const refresh = new Promise<void>(resolve => { release = resolve; });
+  await page.route(/\/api\/trips\?view=history/, async route => {
+    expect(new URL(route.request().url()).searchParams.get('summary')).toBe('1');
+    if (++historyCalls === 1) return route.fulfill({ json: [] });
+    await refresh;
+    return route.fulfill({ json: [summary] });
+  });
+  await page.route('**/api/trips/history-photo', async route => {
+    detailCalls++;
+    return route.fulfill({ json: full });
+  });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'New grocery run' })).toBeVisible();
+  await page.getByRole('button', { name: 'History', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Refreshing history');
+  await expect(page.getByRole('heading', { name: 'No runs yet' })).toHaveCount(0);
+  release();
+  const row = page.getByRole('button', { name: /^Photo market/ });
+  await expect(row).toBeVisible();
+  await expect(page.getByText('Refreshing history…')).toHaveCount(0);
+  expect(detailCalls).toBe(0);
+
+  // Photo exports hydrate only the trips selected for export.
+  await page.getByLabel('Include receipt photos', { exact: false }).check();
+  const downloaded = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export CSV', exact: true }).click();
+  const download = await downloaded;
+  expect(download.suggestedFilename()).toMatch(/\.zip$/);
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+  expect(Buffer.concat(chunks).includes(Buffer.from('receipt_photos/history-photo_1.png'))).toBe(true);
+  expect(detailCalls).toBe(1);
+
+  // A failed hydration keeps the list usable and never opens an editable summary.
+  await page.route('**/api/trips/history-photo', route => route.fulfill({ status: 503, json: {} }));
+  await row.click();
+  await expect(page.getByRole('main').getByRole('alert')).toContainText('Could not open this trip');
+  await expect(page.getByRole('heading', { name: 'Trip history' })).toBeVisible();
+  await page.unroute('**/api/trips/history-photo');
+  let releaseDetails!: () => void;
+  const details = new Promise<void>(resolve => { releaseDetails = resolve; });
+  await page.route('**/api/trips/history-photo', async route => {
+    await details;
+    await route.fulfill({ json: full });
+  });
+  await row.click();
+  await expect(page.getByText('Opening trip…')).toBeVisible();
+  await page.getByRole('button', { name: 'New trip', exact: true }).click();
+  const detailsFinished = page.waitForResponse(response => response.url().endsWith('/api/trips/history-photo'));
+  releaseDetails();
+  await detailsFinished;
+  await expect(page.getByRole('heading', { name: 'New grocery run' })).toBeVisible();
+  await expect(page.getByText('Opening trip…')).toHaveCount(0);
+  await page.getByRole('button', { name: 'History', exact: true }).click();
+  await row.click();
+  await expect(page.getByRole('heading', { name: 'Photo market', exact: true })).toBeVisible();
+  await page.getByText('Receipt photos (1)', { exact: true }).click();
+  await expect(page.getByRole('link', { name: 'Download receipt photo 1' }).first()).toBeVisible();
+});
+
+test('failed history refresh explains that saved trips are being shown', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'New grocery run' })).toBeVisible();
+  await page.route(/\/api\/trips\?view=history/, route => route.fulfill({ status: 503, json: {} }));
+  await page.getByRole('button', { name: 'History', exact: true }).click();
+  await expect(page.getByRole('main').getByRole('alert')).toContainText('Could not refresh history. Showing saved runs.');
+  await expect(page.getByText('Refreshing history…')).toHaveCount(0);
+});

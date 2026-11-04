@@ -12,6 +12,7 @@ import { TRIP_STATUS_LABEL, formatRunDate } from './ScannerHome';
 
 interface TripHistoryProps {
   history: Trip[];
+  refreshing?: boolean;
   household: Household;
   activeParticipantId?: string;
   hiddenTripIds?: string[];
@@ -24,6 +25,7 @@ const UNKNOWN_PAYER: Participant = { id: 'unknown', name: 'Roommate', avatarEmoj
 
 export function TripHistory({
   history,
+  refreshing = false,
   household,
   activeParticipantId,
   hiddenTripIds = [],
@@ -71,9 +73,11 @@ export function TripHistory({
         </p>
       </div>
 
+      {refreshing && <p role="status" className="mb-4 text-sm text-slate-500">Refreshing history…</p>}
+
       <ExportCsv history={exportTrips} household={household} participantId={activeParticipantId} />
 
-      {sortedHistory.length === 0 ? (
+      {sortedHistory.length === 0 && refreshing ? null : sortedHistory.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
           <h2 className="text-base font-medium text-slate-900">No runs yet</h2>
           <p className="mt-1 text-sm text-slate-500">

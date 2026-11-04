@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Download } from 'lucide-react';
 import { Household, Trip } from '@/types';
 import { defaultExportRange, exportTripsToCsv } from '@/lib/export-csv';
+import { loadTripDetails } from '@/lib/trip-history';
 import { buildExportZip } from '@/lib/export-photos';
 
 function downloadFile(blob: Blob, filename: string) {
@@ -26,6 +27,7 @@ interface ExportCsvProps {
 export function ExportCsv({ history, household, participantId }: ExportCsvProps) {
   const [range, setRange] = useState(() => defaultExportRange());
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [includePhotos, setIncludePhotos] = useState(false);
 
   // Defaults to who this device is identified as; choosing here only affects the export.
@@ -33,7 +35,7 @@ export function ExportCsv({ history, household, participantId }: ExportCsvProps)
   const exportAsId = chosenId ?? participantId ?? '';
   const me = household.participants.find((p) => p.id === exportAsId);
 
-  const handleExport = () => {
+  const handleExport = async () => {
     const result = exportTripsToCsv(history, household, exportAsId, range.start, range.end);
     if (!result.ok) {
       setMessage({ text: result.error, isError: true });
@@ -44,9 +46,14 @@ export function ExportCsv({ history, household, participantId }: ExportCsvProps)
     const csvBytes = new TextEncoder().encode(`﻿${result.csv}`);
     const baseName = `grocery-export_${range.start}_to_${range.end}`;
     let photoNote = '';
+    setExporting(true);
+    setMessage(null);
     try {
       if (includePhotos) {
-        const { zip, photoCount, skippedPhotos } = buildExportZip(csvBytes, result.trips);
+        const trips: Trip[] = [];
+        // Fetch sequentially so large exports do not start every photo download at once.
+        for (const trip of result.trips) trips.push(await loadTripDetails(trip));
+        const { zip, photoCount, skippedPhotos } = buildExportZip(csvBytes, trips);
         downloadFile(new Blob([zip as BlobPart], { type: 'application/zip' }), `${baseName}.zip`);
         photoNote = ` with ${photoCount} ${photoCount === 1 ? 'photo' : 'photos'}`;
         if (skippedPhotos) {
@@ -59,6 +66,8 @@ export function ExportCsv({ history, household, participantId }: ExportCsvProps)
       console.error('Export failed:', err);
       setMessage({ text: 'The export could not be created. Try again without photos.', isError: true });
       return;
+    } finally {
+      setExporting(false);
     }
 
     const rows = `${result.rowCount} ${result.rowCount === 1 ? 'row' : 'rows'}`;
@@ -131,10 +140,11 @@ export function ExportCsv({ history, household, participantId }: ExportCsvProps)
         <button
           type="button"
           onClick={handleExport}
+          disabled={exporting}
           className="col-span-2 flex items-center justify-center gap-1.5 rounded-full bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-500 cursor-pointer"
         >
           <Download className="h-4 w-4" aria-hidden="true" />
-          <span>Export CSV</span>
+          <span>{exporting ? 'Preparing export…' : 'Export CSV'}</span>
         </button>
       </div>
       <p className="mt-3 text-sm text-slate-500">

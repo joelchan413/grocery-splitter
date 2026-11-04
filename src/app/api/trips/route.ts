@@ -1,3 +1,4 @@
+import { summarizeTrip } from '@/lib/trip-history';
 import { NextRequest, NextResponse } from 'next/server';
 import { getActiveTrip, getTripHistory, saveTrip } from '@/lib/server-db';
 
@@ -8,7 +9,7 @@ export async function GET(req: NextRequest) {
 
     if (view === 'history') {
       const history = getTripHistory();
-      return NextResponse.json(history);
+      return NextResponse.json(searchParams.get('summary') === '1' ? history.map(summarizeTrip) : history);
     }
 
     const activeTrip = getActiveTrip();
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const trip = await req.json();
-    if (!trip || !trip.id || !Array.isArray(trip.items)) {
+    if (!trip || trip.receiptImagesOmitted || !trip.id || !Array.isArray(trip.items)) {
       return NextResponse.json({ error: 'Invalid trip payload' }, { status: 400 });
     }
     const saved = saveTrip(trip);

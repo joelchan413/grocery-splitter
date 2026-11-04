@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { DEFAULT_HOUSEHOLD } from '../src/lib/storage';
+import { SAMPLE_RECEIPTS } from '../src/lib/receipts';
+import type { Trip } from '../src/types';
 
 test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
   test.beforeEach(async ({ page, request }) => {
@@ -214,4 +217,22 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
     await expect(page.getByText("Costco Wholesale").first()).toBeVisible();
     await expect(page.getByText("Trader Joe's").first()).toBeVisible();
   });
+});
+
+test('history API omits photo bytes while trip details and legacy history keep them', async ({ request }) => {
+  const full: Trip = {
+    id: `history-api-${Date.now()}`, householdId: DEFAULT_HOUSEHOLD.id, storeName: 'API photo market',
+    date: '2026-11-04', payerId: 'p1', items: SAMPLE_RECEIPTS[0].data.items,
+    taxTotal: 0, basketDiscount: 0, receiptImages: [`data:image/png;base64,${Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0]).toString('base64')}`],
+    claims: {}, readyParticipantIds: [], status: 'settled', createdAt: new Date().toISOString(), updatedAt: '2026-11-04T12:00:00Z',
+  };
+  expect((await request.post('/api/trips', { data: full })).ok()).toBe(true);
+  const summaries = await (await request.get('/api/trips?view=history&summary=1')).json() as Trip[];
+  const summary = summaries.find(trip => trip.id === full.id)!;
+  expect(summary).toEqual({ ...full, receiptImages: [], receiptImagesOmitted: true });
+  expect((await request.post('/api/trips', { data: summary })).status()).toBe(400);
+  expect((await request.patch(`/api/trips/${full.id}`, { data: summary })).status()).toBe(400);
+  expect(await (await request.get(`/api/trips/${full.id}`)).json()).toEqual(full);
+  const legacy = await (await request.get('/api/trips?view=history')).json() as Trip[];
+  expect(legacy.find(trip => trip.id === full.id)?.receiptImages).toEqual(full.receiptImages);
 });

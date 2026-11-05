@@ -16,6 +16,12 @@ new Function('module', 'exports', ts.transpileModule(historySource, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText)(historyModule, historyModule.exports);
 
+const paymentsModule = { exports: {} };
+const paymentsSource = fs.readFileSync(path.join(__dirname, '../src/lib/payments.ts'), 'utf8');
+new Function('module', 'exports', ts.transpileModule(paymentsSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText)(paymentsModule, paymentsModule.exports);
+
 const source = fs.readFileSync(path.join(__dirname, '../src/lib/server-db.ts'), 'utf8');
 const compiled = ts.transpileModule(source, {
   compilerOptions: {
@@ -43,7 +49,7 @@ function boot(files, { denyWrites = false } = {}) {
   vm.runInNewContext(compiled, {
     module: sandboxModule,
     exports: sandboxModule.exports,
-    require: (name) => name === '@/lib/trip-history' ? historyModule.exports : name === 'fs' ? fakeFs : name === 'path' ? path.posix : nodeRequire(name),
+    require: (name) => name === '@/lib/trip-history' ? historyModule.exports : name === '@/lib/payments' ? paymentsModule.exports : name === 'fs' ? fakeFs : name === 'path' ? path.posix : nodeRequire(name),
     process: { cwd: () => '/app' },
     console: { error: () => {} },
   });
@@ -164,4 +170,34 @@ test('a failed write leaves the hidden list unchanged', () => {
   assert.throws(() => db.setTripHidden('t1', true), /EACCES/);
   assert.deepEqual(Array.from(db.getHiddenTripIds()), []);
   assert.deepEqual(Array.from(boot(files).getHiddenTripIds()), []);
+});
+test('payments persist across restart, are idempotent, and leave trips and hidden runs untouched', () => {
+  const initial = storedDatabase();
+  initial.household.participants = [{ id: 'p2' }, { id: 'p3' }];
+  initial.trips = { t1: { id: 't1' }, t2: { id: 't2' } };
+  const files = new Map([['/app/data/database.json', JSON.stringify(initial)]]);
+  const db = boot(files);
+  const paid = (database) => JSON.parse(JSON.stringify(database.getPaidShares()));
+  const pay = (tripId, participantId, cents) => ({ tripId, participantId, cents });
+
+  assert.deepEqual(paid(db), {}, 'databases without the field have no payments');
+  db.recordPayments([pay('t1', 'p2', 500), pay('t1', 'p3', 250), pay('t2', 'p2', 100)]);
+  db.recordPayments([pay('t1', 'p2', 500)]);
+  assert.deepEqual(paid(boot(files)), { t1: { p2: 500, p3: 250 }, t2: { p2: 100 } });
+  db.clearPayments([{ tripId: 't1', participantId: 'p3' }, { tripId: 't2', participantId: 'p2' }]);
+  assert.deepEqual(paid(boot(files)), { t1: { p2: 500 } });
+  assert.deepEqual(Array.from(db.getHiddenTripIds()), []);
+  assert.deepEqual(JSON.parse(JSON.stringify(boot(files).getTrip('t1'))), { id: 't1' });
+});
+
+test('payments for unknown trips or roommates are rejected without writing', () => {
+  const initial = storedDatabase();
+  initial.household.participants = [{ id: 'p2' }];
+  initial.trips = { t1: { id: 't1' } };
+  const files = new Map([['/app/data/database.json', JSON.stringify(initial)]]);
+  const db = boot(files);
+  assert.throws(() => db.recordPayments([{ tripId: 'missing', participantId: 'p2', cents: 1 }]), /Unknown trip or roommate/);
+  assert.throws(() => db.recordPayments([{ tripId: 't1', participantId: 'p9', cents: 1 }]), /Unknown trip or roommate/);
+  assert.throws(() => db.recordPayments([{ tripId: 'toString', participantId: 'p2', cents: 1 }]), /Unknown trip or roommate/);
+  assert.deepEqual(JSON.parse(JSON.stringify(boot(files).getPaidShares())), {});
 });

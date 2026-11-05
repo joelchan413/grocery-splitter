@@ -146,6 +146,7 @@ test('every screen fits phone, tablet and desktop, and the sidebar folds below 1
     ['claiming', async () => { await page.getByRole('button', { name: 'Open for roommate claims' }).click(); }],
     ['settlement', async () => { await page.getByRole('button', { name: 'View breakdown' }).click(); }],
     ['history', async () => { await page.getByRole('button', { name: 'History' }).click(); }],
+    ['settle up', async () => { await page.getByRole('button', { name: 'Settle up', exact: true }).click(); }],
   ];
   for (const [, open] of screens) {
     await open();

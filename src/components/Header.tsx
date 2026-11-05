@@ -1,15 +1,16 @@
 'use client';
 
 import React from 'react';
-import { ShoppingBag, Users, History, PlusCircle, Settings, QrCode } from 'lucide-react';
+import { ShoppingBag, Users, History, PlusCircle, Settings, QrCode, HandCoins } from 'lucide-react';
 import { Household } from '@/types';
 
 interface HeaderProps {
   household: Household;
-  activeView: 'scanner' | 'review' | 'claiming' | 'settlement' | 'history';
+  activeView: 'scanner' | 'review' | 'claiming' | 'settlement' | 'history' | 'settle-up';
   hasActiveTrip?: boolean;
   onNewTrip: () => void;
   onOpenHistory: () => void;
+  onOpenSettleUp: () => void;
   onOpenHousehold: () => void;
   onOpenSettings: () => void;
   onOpenShare?: () => void;
@@ -22,6 +23,7 @@ export function Header({
   hasActiveTrip = false,
   onNewTrip,
   onOpenHistory,
+  onOpenSettleUp,
   onOpenHousehold,
   onOpenSettings,
   onOpenShare,
@@ -73,6 +75,18 @@ export function Header({
         >
           <History aria-hidden="true" />
           <span className="app-nav-label">History</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={onOpenSettleUp}
+          aria-current={activeView === 'settle-up' ? 'page' : undefined}
+          className="app-nav-item"
+          aria-label="Settle up"
+          title="Combine unpaid trips into one payment each"
+        >
+          <HandCoins aria-hidden="true" />
+          <span className="app-nav-label">Settle up</span>
         </button>
 
         <button

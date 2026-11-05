@@ -3,6 +3,7 @@ import * as path from 'path';
 import { EventEmitter } from 'events';
 import { Household, Trip } from '@/types';
 import { sortTripHistory } from '@/lib/trip-history';
+import { clearSharesPaid, recordSharesPaid, sanitizePaidShares, type PaidShares, type ShareRef, type SharePayment } from '@/lib/payments';
 
 // Global Event Emitter and in-memory DB attached to globalThis to persist across Next.js route bundles
 const globalForDb = globalThis as unknown as {
@@ -24,6 +25,8 @@ export interface DatabaseSchema {
   history: Trip[];
   // Optional so databases written before trip hiding existed still load unchanged.
   hiddenTripIds?: string[];
+  // How much each roommate has paid back on each trip, in cents. Optional for the same reason.
+  paidShares?: PaidShares;
 }
 
 const DEFAULT_HOUSEHOLD: Household = {
@@ -202,4 +205,40 @@ export function setTripHidden(tripId: string, hidden: boolean): string[] {
   saveDatabase({ ...db, hiddenTripIds: next });
   tripEvents.emit('hidden-updated', next);
   return [...next];
+}
+
+export function getPaidShares(): PaidShares {
+  return sanitizePaidShares(getDatabase().paidShares);
+}
+
+export class UnknownShareError extends Error {}
+
+/**
+ * Applies a change to the household's payment record.
+ * Every trip and roommate must exist, so the record can't fill up with ids nothing refers to.
+ * Idempotent; trips are never modified.
+ */
+function updatePaidShares(shares: readonly ShareRef[], change: (current: PaidShares) => PaidShares): PaidShares {
+  const db = getDatabase();
+  const roommates = new Set(db.household.participants.map((p) => p.id));
+  const unknown = shares.find((s) => !Object.hasOwn(db.trips, s.tripId) || !roommates.has(s.participantId));
+  if (unknown) throw new UnknownShareError(`Unknown trip or roommate: ${unknown.tripId}/${unknown.participantId}`);
+
+  const current = sanitizePaidShares(db.paidShares);
+  const next = change(current);
+  if (JSON.stringify(next) === JSON.stringify(current)) return current;
+
+  saveDatabase({ ...db, paidShares: next });
+  tripEvents.emit('payments-updated', next);
+  return next;
+}
+
+/** Records roommates as having paid back the given amounts. Recording again replaces the amount. */
+export function recordPayments(payments: readonly SharePayment[]): PaidShares {
+  return updatePaidShares(payments, (current) => recordSharesPaid(current, payments));
+}
+
+/** Marks shares as unpaid again. */
+export function clearPayments(shares: readonly ShareRef[]): PaidShares {
+  return updatePaidShares(shares, (current) => clearSharesPaid(current, shares));
 }

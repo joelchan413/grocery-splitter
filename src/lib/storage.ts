@@ -1,5 +1,6 @@
 import { Household, Trip } from '@/types';
 import { sortTripHistory } from '@/lib/trip-history';
+import { sanitizePaidShares, type PaidShares } from '@/lib/payments';
 
 export const DEFAULT_HOUSEHOLD: Household = {
   id: 'household-default',
@@ -19,6 +20,7 @@ const STORAGE_KEYS = {
   TRIP_HISTORY: 'grocery_splitter_trip_history_v1',
   ACTIVE_PARTICIPANT_ID: 'grocery_splitter_active_participant_v1',
   HIDDEN_TRIP_IDS: 'grocery_splitter_hidden_trips_v1',
+  PAID_SHARES: 'grocery_splitter_paid_shares_v1',
 };
 
 export function isHouseholdInitialized(): boolean {
@@ -172,6 +174,27 @@ export function saveHiddenTripIds(ids: string[]): void {
     localStorage.setItem(STORAGE_KEYS.HIDDEN_TRIP_IDS, JSON.stringify(ids));
   } catch (e) {
     console.error('Error saving hidden trips:', e);
+  }
+}
+
+/** A local copy of who has paid back which trip, kept apart from the trips for the same reason. */
+export function loadPaidShares(): PaidShares {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.PAID_SHARES);
+    return sanitizePaidShares(raw ? JSON.parse(raw) : {});
+  } catch (e) {
+    console.error('Error loading payments:', e);
+    return {};
+  }
+}
+
+export function savePaidShares(paid: PaidShares): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEYS.PAID_SHARES, JSON.stringify(paid));
+  } catch (e) {
+    console.error('Error saving payments:', e);
   }
 }
 

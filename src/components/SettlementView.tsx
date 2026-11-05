@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Send, Copy, Check, Edit3, ChevronDown, ChevronUp, Archive } from 'lucide-react';
+import { Send, Copy, Check, Edit3, ChevronDown, ChevronUp, Archive, CircleCheck, CircleDollarSign } from 'lucide-react';
 import { Household, Trip } from '@/types';
 import { calculateTripSettlement, round2 } from '@/lib/calculations';
+import type { PaidShares, ShareRef, SharePayment } from '@/lib/payments';
+import { tripPaymentStatus, type TripDebt } from '@/lib/combined-balances';
 import confetti from 'canvas-confetti';
 import { Avatar } from './Avatar';
 import { formatRunDate } from './ScannerHome';
@@ -13,6 +15,9 @@ interface SettlementViewProps {
   household: Household;
   onEditClaims: () => void;
   onArchiveTrip: () => void;
+  paidShares?: PaidShares;
+  onRecordPayments?: (payments: SharePayment[]) => void;
+  onClearPayments?: (shares: ShareRef[]) => void;
 }
 
 const money = (value: number) => `$${value.toFixed(2)}`;
@@ -22,6 +27,9 @@ export function SettlementView({
   household,
   onEditClaims,
   onArchiveTrip,
+  paidShares = {},
+  onRecordPayments,
+  onClearPayments,
 }: SettlementViewProps) {
   const [copiedSummary, setCopiedSummary] = useState(false);
   const [expandedParticipantId, setExpandedParticipantId] = useState<string | null>(null);
@@ -34,6 +42,18 @@ export function SettlementView({
   const totalReimbursement = round2(
     summary.participants.filter((p) => !p.isPayer).reduce((acc, p) => acc + p.netOwed, 0)
   );
+
+  // Payments are only tracked while whoever paid is still in the household.
+  const payments = tripPaymentStatus(trip, household, paidShares);
+  const tracksPayments = Boolean(onRecordPayments && onClearPayments) && !payments.payerMissing && payments.debts.length > 0;
+  const debtFor = (participantId: string) => payments.debts.find((d) => d.participant.id === participantId);
+  const isPaidOut = payments.isPaidOut && payments.debts.length > 0;
+  const receivedCents = payments.debts.reduce((acc, d) => acc + Math.min(d.paidCents, d.owedCents), 0);
+  // Marking paid records each roommate's full share as it stands now.
+  const markPaid = (debts: TripDebt[]) =>
+    onRecordPayments?.(debts.map((d) => ({ tripId: trip.id, participantId: d.participant.id, cents: d.owedCents })));
+  const markUnpaid = (debts: TripDebt[]) =>
+    onClearPayments?.(debts.map((d) => ({ tripId: trip.id, participantId: d.participant.id })));
 
   const handleCopySummary = async () => {
     try {
@@ -91,8 +111,22 @@ export function SettlementView({
         <div className="sm:text-right">
           <p className="text-sm text-slate-500">{payer.name} gets back</p>
           <p className="text-[32px] font-semibold leading-tight text-positive num">+{money(totalReimbursement)}</p>
+          {tracksPayments && (
+            <p className="text-sm text-slate-500">
+              {isPaidOut
+                ? 'Everyone has paid'
+                : `${money(receivedCents / 100)} received · ${payments.paidCount} of ${payments.debts.length} paid`}
+            </p>
+          )}
         </div>
       </section>
+
+      {payments.payerMissing && (
+        <p className="mb-6 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Whoever paid for this trip is no longer in the household, so there is nobody to send money to and payments
+          aren&apos;t tracked here.
+        </p>
+      )}
 
       {/* Actions */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -106,6 +140,21 @@ export function SettlementView({
         </button>
 
         <div className="flex flex-wrap items-center gap-2">
+          {tracksPayments && (
+            <button
+              type="button"
+              onClick={() => {
+                if (!isPaidOut) return markPaid(payments.unpaid);
+                if (confirm('Mark everyone on this trip as unpaid?')) markUnpaid(payments.debts);
+              }}
+              aria-pressed={isPaidOut}
+              className={`flex items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors cursor-pointer ${isPaidOut ? 'border-transparent bg-positive-soft text-positive' : 'border-slate-300 bg-white text-slate-900 hover:bg-slate-50'}`}
+            >
+              {isPaidOut ? <CircleCheck className="h-3.5 w-3.5" aria-hidden="true" /> : <CircleDollarSign className="h-3.5 w-3.5" aria-hidden="true" />}
+              <span>{isPaidOut ? 'Paid out' : 'Mark everyone paid'}</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleCopySummary}
@@ -144,10 +193,16 @@ export function SettlementView({
           const drawerId = `settlement-items-${p.participantId}`;
           const shown = p.isPayer ? p.ownShare : p.netOwed;
           const adjustment = round2(shown - (p.itemsShare + p.taxAttributed - p.basketDiscountShare));
+          const debt = tracksPayments ? debtFor(p.participantId) : undefined;
+          const owes = !p.isPayer && p.netOwed > 0;
+          const paid = Boolean(debt && debt.remainingCents === 0);
+          // Paid before the share grew: only the difference is still owed.
+          const stillOwed = debt && debt.paidCents > 0 && debt.remainingCents > 0 ? debt.remainingCents / 100 : null;
+          const venmoLink = (p.venmoDeepLink || p.venmoWebLink).replace(/([?&]amount=)[\d.]+/, `$1${(stillOwed ?? p.netOwed).toFixed(2)}`);
           return (
             <li key={p.participantId} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              <div className="flex items-center justify-between gap-3 p-4">
-                <div className="flex min-w-0 items-center gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+                <div className="flex min-w-[9rem] flex-1 items-center gap-3">
                   <Avatar participant={p.participant} />
                   <div className="min-w-0">
                     <p className="truncate text-base font-medium text-slate-900">{p.participant.name}</p>
@@ -157,18 +212,34 @@ export function SettlementView({
                   </div>
                 </div>
 
-                <div className="flex flex-none items-center gap-3">
+                <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
                   <div className="text-right">
-                    <p className="text-xs text-slate-500">{p.isPayer ? 'Own share' : `Owes ${payer.name}`}</p>
-                    <p className="text-lg font-semibold text-slate-900 num">{money(shown)}</p>
+                    <p className="text-xs text-slate-500">
+                      {p.isPayer ? 'Own share' : paid ? `Paid ${payer.name}` : stillOwed !== null ? `Owes ${money(stillOwed)} more` : `Owes ${payer.name}`}
+                    </p>
+                    <p className={`text-lg font-semibold num ${paid ? 'text-positive' : 'text-slate-900'}`}>{money(shown)}</p>
                   </div>
 
-                  {!p.isPayer && p.netOwed > 0 && (p.venmoDeepLink || p.venmoWebLink) && (
+                  {debt && (
+                    <button
+                      type="button"
+                      onClick={() => (paid ? markUnpaid([debt]) : markPaid([debt]))}
+                      aria-pressed={paid}
+                      aria-label={`${p.participant.name} has paid ${payer.name}`}
+                      title={paid ? 'Paid. Click to mark unpaid' : 'Mark as paid'}
+                      className={`flex items-center gap-1 rounded-full border px-3 py-2 text-sm font-medium transition-colors ${paid ? 'border-transparent bg-positive-soft text-positive' : 'border-slate-300 bg-white text-slate-900 hover:bg-slate-50'}`}
+                    >
+                      {paid ? <CircleCheck className="h-3.5 w-3.5" aria-hidden="true" /> : <CircleDollarSign className="h-3.5 w-3.5" aria-hidden="true" />}
+                      <span>Paid</span>
+                    </button>
+                  )}
+
+                  {owes && !paid && venmoLink && !payments.payerMissing && (
                     <a
-                      href={p.venmoDeepLink || p.venmoWebLink}
+                      href={venmoLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      aria-label={`Venmo: ${p.participant.name} pays ${payer.name} ${money(p.netOwed)}`}
+                      aria-label={`Venmo: ${p.participant.name} pays ${payer.name} ${money(stillOwed ?? p.netOwed)}`}
                       className="flex items-center gap-1.5 rounded-full bg-[#0074DE] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#005FB8] active:scale-95 transition-colors"
                     >
                       <Send className="h-3.5 w-3.5" aria-hidden="true" />

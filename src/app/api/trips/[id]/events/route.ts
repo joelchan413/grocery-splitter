@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getTrip, tripEvents } from '@/lib/server-db';
 import { Trip } from '@/types';
+import { sameReceiptImages, withoutReceiptImages } from '@/lib/trip-sync';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -11,6 +12,9 @@ export async function GET(
 ) {
   const { id: tripId } = await params;
   const initialTrip = getTrip(tripId);
+  const compact = req.nextUrl.searchParams.get('compact') === '1';
+  let lastImages = initialTrip?.receiptImages;
+  let hasFullTrip = Boolean(initialTrip);
 
   const encoder = new TextEncoder();
   let heartbeatInterval: NodeJS.Timeout | null = null;
@@ -38,7 +42,13 @@ export async function GET(
       // 2. Listen for real-time updates to this specific trip
       onTripUpdate = (updatedTrip: Trip) => {
         try {
-          const payload = `data: ${JSON.stringify(updatedTrip)}\n\n`;
+          // First connection always gets full photos. Subsequent updates carry
+          // photos only when they changed, including an explicit empty array.
+          const update = compact && hasFullTrip && sameReceiptImages(lastImages, updatedTrip.receiptImages)
+            ? withoutReceiptImages(updatedTrip) : updatedTrip;
+          const payload = `data: ${JSON.stringify(update)}\n\n`;
+          lastImages = updatedTrip.receiptImages;
+          hasFullTrip = true;
           controller.enqueue(encoder.encode(payload));
         } catch (err) {
           console.error('Error sending SSE message:', err);

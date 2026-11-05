@@ -3,7 +3,7 @@
 import React from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, ChevronUp, CircleCheck, Send } from 'lucide-react';
 import type { Household, Trip } from '@/types';
-import { combineUnpaidBalances, selectTripsWithMissingPayer, selectUnpaidTrips, tripPaymentStatus } from '@/lib/combined-balances';
+import { combineUnpaidBalances, selectTripsWithMissingPayer, selectUnpaidTrips, createTripStatusLookup } from '@/lib/combined-balances';
 import type { PaidShares, SharePayment } from '@/lib/payments';
 import { sortTripHistory } from '@/lib/trip-history';
 import { Avatar } from './Avatar';
@@ -38,13 +38,14 @@ export function SettleUp({
   const [expanded, setExpanded] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState<string | null>(null);
 
+  const statusFor = React.useMemo(() => createTripStatusLookup(household, paidShares), [household, paidShares]);
   const unpaidTrips = React.useMemo(
-    () => sortTripHistory(selectUnpaidTrips(history, household, paidShares, hiddenTripIds)),
-    [history, household, paidShares, hiddenTripIds]
+    () => sortTripHistory(selectUnpaidTrips(history, household, paidShares, hiddenTripIds, statusFor)),
+    [history, household, paidShares, hiddenTripIds, statusFor]
   );
   const payments = React.useMemo(
-    () => combineUnpaidBalances(unpaidTrips, household, paidShares),
-    [unpaidTrips, household, paidShares]
+    () => combineUnpaidBalances(unpaidTrips, household, paidShares, statusFor),
+    [unpaidTrips, household, paidShares, statusFor]
   );
   const toSend = payments.filter((p) => p.amount > 0).length;
   const payerLeft = React.useMemo(
@@ -73,7 +74,7 @@ export function SettleUp({
     markPaid(
       'all',
       unpaidTrips.flatMap((trip) =>
-        tripPaymentStatus(trip, household, paidShares).unpaid.map((d) => ({
+        statusFor(trip).unpaid.map((d) => ({
           tripId: trip.id,
           participantId: d.participant.id,
           cents: d.owedCents,
@@ -236,7 +237,7 @@ export function SettleUp({
             <ul className="divide-y divide-slate-200">
               {unpaidTrips.map((trip) => {
                 const payer = household.participants.find((p) => p.id === trip.payerId);
-                const { unpaid, paidCount, debts } = tripPaymentStatus(trip, household, paidShares);
+                const { unpaid, paidCount, debts } = statusFor(trip);
                 return (
                   <li key={trip.id}>
                     <button

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { EventEmitter } from 'events';
+import { createHash } from 'node:crypto';
 import { Household, Trip } from '@/types';
 import { sortTripHistory } from '@/lib/trip-history';
 import { clearSharesPaid, recordSharesPaid, sanitizePaidShares, type PaidShares, type ShareRef, type SharePayment } from '@/lib/payments';
@@ -9,6 +10,8 @@ import { clearSharesPaid, recordSharesPaid, sanitizePaidShares, type PaidShares,
 const globalForDb = globalThis as unknown as {
   memoryDb?: DatabaseSchema;
   tripEvents?: EventEmitter;
+  storageVersion?: number;
+  photoRefs?: WeakMap<string[], string>;
 };
 
 class TripEventEmitter extends EventEmitter {}
@@ -42,6 +45,82 @@ const DEFAULT_HOUSEHOLD: Household = {
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'database.json');
+const PHOTO_DIR = path.join(DATA_DIR, 'receipt-photos');
+const LEGACY_BACKUP = path.join(DATA_DIR, 'database.v1-backup.json');
+const photoRefs = globalForDb.photoRefs ??= new WeakMap<string[], string>();
+
+interface StoredTrip extends Omit<Trip, 'receiptImages'> {
+  receiptImages?: string[];
+  receiptImagesRef?: string;
+}
+
+function syncDirectory(directory: string): void {
+  const fd = fs.openSync(directory, 'r');
+  try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+}
+
+function atomicWrite(file: string, contents: string, durable = false): void {
+  const temp = `${file}.tmp.${process.pid}.${Date.now()}`;
+  try {
+    fs.writeFileSync(temp, contents, 'utf-8');
+    if (durable) {
+      const fd = fs.openSync(temp, 'r');
+      try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+    }
+    fs.renameSync(temp, file);
+    if (durable) syncDirectory(path.dirname(file));
+  } catch (error) {
+    try { if (fs.existsSync(temp)) fs.unlinkSync(temp); } catch {}
+    throw error;
+  }
+}
+
+// Immutable, content-addressed files are committed before database.json refers to
+// them. Failed metadata writes can leave an unreferenced photo, never a broken
+// pointer in the previously committed database. Photo bytes are unchanged.
+function storeTripPhotos(trip: Trip): StoredTrip {
+  // Storage references are private to this layer, never accepted from API data.
+  const clean: StoredTrip = { ...trip };
+  delete clean.receiptImagesRef;
+  if (trip.receiptImages != null && (!Array.isArray(trip.receiptImages) || !trip.receiptImages.every((image) => typeof image === 'string'))) {
+    throw new Error('Invalid receipt photos');
+  }
+  if (!trip.receiptImages?.length) return clean;
+  let ref = photoRefs.get(trip.receiptImages);
+  if (!ref) {
+    const encoded = JSON.stringify(trip.receiptImages);
+    ref = createHash('sha256').update(encoded).digest('hex');
+    fs.mkdirSync(PHOTO_DIR, { recursive: true });
+    const file = path.join(PHOTO_DIR, `${ref}.json`);
+    if (!fs.existsSync(file) || fs.readFileSync(file, 'utf-8') !== encoded) {
+      // Persist the directory entry, file data, then the photo's final name
+      // before database.json is allowed to reference it.
+      syncDirectory(DATA_DIR);
+      atomicWrite(file, encoded, true);
+    }
+    photoRefs.set(trip.receiptImages, ref);
+  }
+  const stored: StoredTrip = { ...clean, receiptImagesRef: ref };
+  delete stored.receiptImages;
+  return stored;
+}
+
+function restoreTripPhotos(stored: StoredTrip, loaded: Map<string, string[]>): Trip {
+  const { receiptImagesRef: ref, ...trip } = stored;
+  if (!ref) return trip as Trip;
+  if (!/^[a-f0-9]{64}$/.test(ref)) throw new Error('Invalid receipt photo reference');
+  let images = loaded.get(ref);
+  if (!images) {
+    const encoded = fs.readFileSync(path.join(PHOTO_DIR, `${ref}.json`), 'utf-8');
+    if (createHash('sha256').update(encoded).digest('hex') !== ref) throw new Error('Receipt photo file is damaged');
+    const parsed: unknown = JSON.parse(encoded);
+    if (!Array.isArray(parsed) || !parsed.every((image) => typeof image === 'string')) throw new Error('Invalid receipt photos');
+    images = parsed;
+    loaded.set(ref, images);
+    photoRefs.set(images, ref);
+  }
+  return { ...trip, receiptImages: images };
+}
 
 function ensureDataDir(): void {
   if (!fs.existsSync(DATA_DIR)) {
@@ -67,8 +146,18 @@ export function getDatabase(): DatabaseSchema {
 
   try {
     const raw = fs.readFileSync(DB_FILE, 'utf-8');
-    globalForDb.memoryDb = JSON.parse(raw);
-    return globalForDb.memoryDb!;
+    const stored = JSON.parse(raw);
+    if (stored.storageVersion != null && stored.storageVersion !== 2) throw new Error('Unsupported database storage version');
+    const loaded = new Map<string, string[]>();
+    const { storageVersion, ...metadata } = stored;
+    const database: DatabaseSchema = storageVersion === 2 ? {
+      ...metadata,
+      trips: Object.fromEntries(Object.entries(stored.trips as Record<string, StoredTrip>).map(([id, trip]) => [id, restoreTripPhotos(trip, loaded)])),
+      history: (stored.history as StoredTrip[]).map((trip) => restoreTripPhotos(trip, loaded)),
+    } : metadata;
+    globalForDb.storageVersion = storageVersion ?? 1;
+    globalForDb.memoryDb = database;
+    return database;
   } catch (err) {
     console.error('Error reading database file:', err);
     throw err;
@@ -77,16 +166,27 @@ export function getDatabase(): DatabaseSchema {
 
 export function saveDatabase(data: DatabaseSchema): void {
   ensureDataDir();
-  const tempFile = `${DB_FILE}.tmp.${Date.now()}`;
   try {
-    fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf-8');
-    fs.renameSync(tempFile, DB_FILE);
+    // Keep the original embedded-photo database intact before the first migration.
+    if (globalForDb.storageVersion !== 2 && fs.existsSync(DB_FILE) && !fs.existsSync(LEGACY_BACKUP)) {
+      fs.copyFileSync(DB_FILE, LEGACY_BACKUP, fs.constants.COPYFILE_EXCL);
+    }
+    const storedTrips = new Map<Trip, StoredTrip>();
+    const store = (trip: Trip) => {
+      let stored = storedTrips.get(trip);
+      if (!stored) { stored = storeTripPhotos(trip); storedTrips.set(trip, stored); }
+      return stored;
+    };
+    atomicWrite(DB_FILE, JSON.stringify({
+      ...data,
+      storageVersion: 2,
+      trips: Object.fromEntries(Object.entries(data.trips).map(([id, trip]) => [id, store(trip)])),
+      history: data.history.map(store),
+    }));
     globalForDb.memoryDb = data;
+    globalForDb.storageVersion = 2;
   } catch (err) {
     console.error('Error writing database file:', err);
-    try {
-      if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
-    } catch {}
     throw err;
   }
 }

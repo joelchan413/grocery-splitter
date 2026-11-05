@@ -127,3 +127,11 @@ failure paths without Docker, run `bash tests/redeploy.test.sh`.
 
 - [CONTEXT.md](./CONTEXT.md) — Canonical domain glossary and vocabulary.
 - [0001-tax-attribution-and-unclaimed-splitting.md](./docs/adr/0001-tax-attribution-and-unclaimed-splitting.md) — Architectural decision record for tax and unclaimed splitting.
+
+## Performance and storage format
+
+Receipt photos now live in immutable files under `data/receipt-photos`; the first
+save preserves an old-format database as `data/database.v1-backup.json`. Back up
+the entire `data` directory. Older app versions require a legacy export before
+rollback after migration. See [migration, rollback, browser caching, and benchmark
+instructions](docs/performance/README.md).

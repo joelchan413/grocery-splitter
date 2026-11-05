@@ -1,0 +1,21 @@
+{
+  "node": "v22.23.4",
+  "baseline_commit": "168fca36eb7a83963bfeda44a4b01be6b48e38e5",
+  "fixture": {
+    "trips": 50,
+    "items_per_trip": 20,
+    "photo_kib_per_trip": 256,
+    "samples": 12
+  },
+  "before": {
+    "p50_ms": 126.59,
+    "p95_ms": 142.38,
+    "bytes_written_per_claim": 26627336
+  },
+  "after": {
+    "p50_ms": 1.38,
+    "p95_ms": 1.44,
+    "bytes_written_per_claim": 223089
+  },
+  "limitations": "Synthetic warm local-disk writes; excludes migration, HTTP, browser rendering, fsync and physical mobile devices."
+}

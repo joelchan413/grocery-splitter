@@ -1,5 +1,7 @@
 import { Household, Trip } from '@/types';
-import { sortTripHistory } from '@/lib/trip-history';
+import { sortTripHistory, summarizeTrip } from '@/lib/trip-history';
+import { cacheTrip, loadCachedTrip, type CacheTripOptions } from '@/lib/trip-cache';
+import { nextTripTimestamp } from '@/lib/trip-sync';
 import { sanitizePaidShares, type PaidShares } from '@/lib/payments';
 
 export const DEFAULT_HOUSEHOLD: Household = {
@@ -58,49 +60,88 @@ export function saveHousehold(household: Household): void {
   }
 }
 
-export function loadActiveTrip(): Trip | null {
+export async function loadActiveTrip(): Promise<Trip | null> {
   if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_TRIP);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const trip: Trip = JSON.parse(raw);
+    return trip.receiptImagesOmitted ? await loadCachedTrip(trip.id) : trip;
   } catch (e) {
     console.error('Error loading active trip:', e);
     return null;
   }
 }
 
-export function saveActiveTrip(trip: Trip | null): void {
+let activeSave = 0;
+export function saveActiveTrip(trip: Trip | null, options: CacheTripOptions = {}): void {
   if (typeof window === 'undefined') return;
+  const save = ++activeSave;
   try {
-    if (trip) {
-      localStorage.setItem(STORAGE_KEYS.ACTIVE_TRIP, JSON.stringify(trip));
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.ACTIVE_TRIP);
-    }
+    if (!trip) { localStorage.removeItem(STORAGE_KEYS.ACTIVE_TRIP); return; }
+    // Publish the pointer only after the complete offline copy is durable. A
+    // pending photo write must never resurrect a trip after New trip or Archive.
+    void cacheTrip(trip, options).then(() => {
+      if (save === activeSave) localStorage.setItem(STORAGE_KEYS.ACTIVE_TRIP, JSON.stringify(summarizeTrip(trip)));
+    }).catch((error) => console.error('Error saving active trip:', error));
   } catch (e) {
     console.error('Error saving active trip:', e);
   }
 }
 
+let latestHistory: Trip[] | undefined;
+let historyRaw: string | null | undefined;
+
 export function loadTripHistory(): Trip[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.TRIP_HISTORY);
-    if (!raw) return [];
-    return JSON.parse(raw);
+    if (raw !== historyRaw) {
+      latestHistory = raw ? JSON.parse(raw) : [];
+      historyRaw = raw;
+    }
+    return latestHistory ?? [];
   } catch (e) {
     console.error('Error loading trip history:', e);
     return [];
   }
 }
 
+let historySave = 0;
+let migrationRaw: string | null | undefined;
+let legacyTrips: Trip[] = [];
 export function saveTripHistory(history: Trip[]): void {
   if (typeof window === 'undefined') return;
+  const save = ++historySave;
+  latestHistory = history;
   try {
-    localStorage.setItem(STORAGE_KEYS.TRIP_HISTORY, JSON.stringify(history));
-  } catch (e) {
-    console.error('Error saving trip history:', e);
+    historyRaw = localStorage.getItem(STORAGE_KEYS.TRIP_HISTORY);
+    if (historyRaw !== migrationRaw) {
+      const persisted: Trip[] = historyRaw ? JSON.parse(historyRaw) : [];
+      legacyTrips = persisted.filter((trip) => !trip.receiptImagesOmitted);
+      migrationRaw = historyRaw;
+    }
+    // A later server refresh may contain only summaries. It must still preserve
+    // any embedded legacy photos until their IndexedDB migration has succeeded.
+    const migrate = legacyTrips.map(async (trip) => {
+      const cached = await loadCachedTrip(trip.id);
+      if (!cached || getTripTimestamp(trip) > getTripTimestamp(cached)) await cacheTrip(trip);
+    });
+    void Promise.all(migrate).then(() => Promise.all(history.filter((trip) => !trip.receiptImagesOmitted).map((trip) => cacheTrip(trip)))).then(() => {
+      if (save === historySave) {
+        // Another tab can finish a save while this tab waits for IndexedDB.
+        // Merge again at publication rather than replacing that tab's history.
+        const current: Trip[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.TRIP_HISTORY) || '[]');
+        const summaries = mergeTripHistory(current, history.map(summarizeTrip)).map(summarizeTrip);
+        const raw = JSON.stringify(summaries);
+        localStorage.setItem(STORAGE_KEYS.TRIP_HISTORY, raw);
+        historyRaw = migrationRaw = raw;
+        legacyTrips = [];
+        latestHistory = summaries;
+      }
+    }).catch((error) => console.error('Error saving trip history:', error));
+  } catch (error) {
+    console.error('Error saving trip history:', error);
   }
 }
 
@@ -137,19 +178,27 @@ export function mergeTripHistory(localHistory: Trip[], incomingHistory: Trip[]):
   return sortTripHistory(Array.from(map.values()));
 }
 
-export function addOrUpdateTripHistory(trip: Trip): void {
-  if (typeof window === 'undefined') return;
+export function addOrUpdateTripHistory(trip: Trip): Trip[] {
+  if (typeof window === 'undefined') return [];
   try {
     const history = loadTripHistory();
     const updated = mergeTripHistory(history, [trip]);
     saveTripHistory(updated);
+    return updated;
   } catch (e) {
     console.error('Error updating trip history:', e);
+    return loadTripHistory();
   }
 }
 
-export function archiveTrip(trip: Trip): void {
-  addOrUpdateTripHistory({ ...trip, status: 'settled', updatedAt: new Date().toISOString() });
+export function archiveTrip(trip: Trip): Trip[] {
+  const previous = loadTripHistory().find((entry) => entry.id === trip.id);
+  const latest = previous && getTripTimestamp(previous) > getTripTimestamp(trip) ? previous : trip;
+  const archived: Trip = { ...trip, status: 'settled', updatedAt: nextTripTimestamp(latest) };
+  // Archiving is an explicit user edit, so a superseded clock-ahead revision
+  // must not prevent the settled snapshot from becoming the offline copy.
+  void cacheTrip(archived, { authoritative: true }).catch((error) => console.error('Error caching archived trip:', error));
+  return addOrUpdateTripHistory(archived);
 }
 
 /**

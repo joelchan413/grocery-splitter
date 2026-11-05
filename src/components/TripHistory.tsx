@@ -45,13 +45,18 @@ export function TripHistory({
 }: TripHistoryProps) {
   const sortedHistory = React.useMemo(() => sortTripHistory(history || []), [history]);
   const [showHidden, setShowHidden] = React.useState(false);
+  const [visibleCount, setVisibleCount] = React.useState(50);
   // Trips are included in the export unless unchecked, so new trips default to included.
   const [deselectedIds, setDeselectedIds] = React.useState<string[]>([]);
 
   const hiddenSet = React.useMemo(() => new Set(hiddenTripIds), [hiddenTripIds]);
+  const summaries = React.useMemo(
+    () => new Map(sortedHistory.map((trip) => [trip.id, calculateTripSettlement(trip, household)])),
+    [sortedHistory, household]
+  );
   const paymentStatus = React.useMemo(
-    () => new Map(sortedHistory.map((trip) => [trip.id, tripPaymentStatus(trip, household, paidShares)])),
-    [sortedHistory, household, paidShares]
+    () => new Map(sortedHistory.map((trip) => [trip.id, tripPaymentStatus(trip, household, paidShares, summaries.get(trip.id))])),
+    [sortedHistory, household, paidShares, summaries]
   );
   const visibleHistory = React.useMemo(
     () => sortedHistory.filter((trip) => !hiddenSet.has(trip.id)),
@@ -153,7 +158,7 @@ export function TripHistory({
             </p>
           )}
           <ul className="space-y-3">
-            {listedHistory.map((trip) => {
+            {listedHistory.slice(0, visibleCount).map((trip) => {
               const isHidden = hiddenSet.has(trip.id);
               const payments = paymentStatus.get(trip.id);
               const canMarkPaid = trip.status !== 'review' && Boolean(payments?.debts.length);
@@ -165,7 +170,7 @@ export function TripHistory({
               const payer =
                 household.participants.find((p) => p.id === trip.payerId) ||
                 household.participants[0] || { ...UNKNOWN_PAYER, id: trip.payerId || 'unknown' };
-              const summary = calculateTripSettlement(trip, household);
+              const summary = summaries.get(trip.id)!;
               const totalBill = typeof summary.totalBill === 'number' && !Number.isNaN(summary.totalBill)
                 ? summary.totalBill
                 : 0;
@@ -249,6 +254,15 @@ export function TripHistory({
               );
             })}
           </ul>
+          {listedHistory.length > visibleCount && (
+            <button
+              type="button"
+              onClick={() => setVisibleCount((count) => count + 50)}
+              className="mt-4 w-full cursor-pointer rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-900 hover:bg-slate-50"
+            >
+              Show more runs ({listedHistory.length - visibleCount} remaining)
+            </button>
+          )}
         </>
       )}
     </div>

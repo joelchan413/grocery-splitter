@@ -1,7 +1,7 @@
 'use client';
 
 /* eslint-disable @next/next/no-img-element -- Saved data URLs have unknown dimensions and need no image optimization. */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Download, ScanSearch, X, ZoomIn, ZoomOut } from 'lucide-react';
 import type { Trip } from '@/types';
 
@@ -9,7 +9,17 @@ export function ReceiptPhotos({ trip }: { trip: Trip }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [zoomed, setZoomed] = useState(false);
+  const [photosOpen, setPhotosOpen] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const images = trip.receiptImages || [];
+  useEffect(() => {
+    if (!viewerOpen) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    // Wait for the title and controls to exist before opening and moving focus.
+    dialog.showModal();
+    dialog.querySelector<HTMLButtonElement>('[aria-label="Close receipt photo"]')?.focus();
+  }, [viewerOpen]);
   const filename = (index: number) => {
     const extension = images[index]?.match(/^data:image\/(jpeg|png|webp);/i)?.[1]?.toLowerCase() || 'jpg';
     const store = trip.storeName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'receipt';
@@ -19,11 +29,11 @@ export function ReceiptPhotos({ trip }: { trip: Trip }) {
 
   return (
     <section aria-label="Saved receipt photos" className="mx-auto max-w-4xl px-4 pt-6">
-      <details className="rounded-2xl border border-slate-200 bg-white">
+      <details onToggle={(event) => setPhotosOpen(event.currentTarget.open)} className="rounded-2xl border border-slate-200 bg-white">
         <summary className="cursor-pointer rounded-2xl px-4 py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-primary-600">
           Receipt photos ({images.length})
         </summary>
-        {images.length === 0 ? (
+        {photosOpen && (images.length === 0 ? (
           <p className="px-4 pb-4 text-sm text-slate-500">No receipt photos were saved for this trip.</p>
         ) : (
           <div className="grid grid-cols-1 gap-4 px-4 pb-4 sm:grid-cols-3">
@@ -36,7 +46,7 @@ export function ReceiptPhotos({ trip }: { trip: Trip }) {
                   onClick={() => {
                     setSelectedIndex(index);
                     setZoomed(false);
-                    dialogRef.current?.showModal();
+                    setViewerOpen(true);
                   }}
                 >
                   <img src={src} alt={`Receipt photo ${index + 1} from ${trip.storeName}`} loading="lazy" className="h-40 w-full object-contain" />
@@ -50,32 +60,35 @@ export function ReceiptPhotos({ trip }: { trip: Trip }) {
               </div>
             ))}
           </div>
-        )}
+        ))}
       </details>
 
       {images.length > 0 && <dialog
         ref={dialogRef}
+        onClose={() => setViewerOpen(false)}
         aria-labelledby="receipt-photo-title"
         className="fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-4xl overflow-auto rounded-2xl border border-slate-200 bg-white p-0 text-slate-900 backdrop:bg-black/60"
       >
-        <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white p-3">
-          <h2 id="receipt-photo-title" className="text-sm font-semibold">Receipt photo {selectedIndex + 1} of {images.length}</h2>
-          <div className="flex items-center gap-1">
-            <button type="button" className={actionClass} onClick={() => setZoomed(!zoomed)} aria-pressed={zoomed}>
-              {zoomed ? <ZoomOut className="h-4 w-4" aria-hidden="true" /> : <ZoomIn className="h-4 w-4" aria-hidden="true" />}
-              {zoomed ? 'Fit to width' : 'Actual size'}
-            </button>
-            <a href={images[selectedIndex]} download={filename(selectedIndex)} className={actionClass} aria-label={`Download receipt photo ${selectedIndex + 1}`}>
-              <Download className="h-4 w-4" aria-hidden="true" /> Download
-            </a>
-            <button type="button" onClick={() => dialogRef.current?.close()} aria-label="Close receipt photo" className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-primary-600">
-              <X className="h-5 w-5" aria-hidden="true" />
-            </button>
+        {viewerOpen && <>
+          <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white p-3">
+            <h2 id="receipt-photo-title" className="text-sm font-semibold">Receipt photo {selectedIndex + 1} of {images.length}</h2>
+            <div className="flex items-center gap-1">
+              <button type="button" className={actionClass} onClick={() => setZoomed(!zoomed)} aria-pressed={zoomed}>
+                {zoomed ? <ZoomOut className="h-4 w-4" aria-hidden="true" /> : <ZoomIn className="h-4 w-4" aria-hidden="true" />}
+                {zoomed ? 'Fit to width' : 'Actual size'}
+              </button>
+              <a href={images[selectedIndex]} download={filename(selectedIndex)} className={actionClass} aria-label={`Download receipt photo ${selectedIndex + 1}`}>
+                <Download className="h-4 w-4" aria-hidden="true" /> Download
+              </a>
+              <button type="button" onClick={() => dialogRef.current?.close()} aria-label="Close receipt photo" className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-primary-600">
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
           </div>
-        </div>
-        <div className="overflow-auto bg-slate-100 p-3">
-          {images[selectedIndex] && <img src={images[selectedIndex]} alt={`Receipt photo ${selectedIndex + 1} from ${trip.storeName}`} className={`mx-auto h-auto ${zoomed ? 'max-w-none' : 'max-w-full'}`} />}
-        </div>
+          <div className="overflow-auto bg-slate-100 p-3">
+            {images[selectedIndex] && <img src={images[selectedIndex]} alt={`Receipt photo ${selectedIndex + 1} from ${trip.storeName}`} className={`mx-auto h-auto ${zoomed ? 'max-w-none' : 'max-w-full'}`} />}
+          </div>
+        </>}
       </dialog>}
     </section>
   );

@@ -1,4 +1,4 @@
-import type { Household, Participant, Trip } from '@/types';
+import type { Household, Participant, Trip, TripSettlementSummary } from '@/types';
 import { calculateTripSettlement } from '@/lib/calculations';
 import { paidCents, type PaidShares, type SharePayment } from '@/lib/payments';
 
@@ -39,11 +39,16 @@ export interface TripDebt {
  * When whoever paid has left the household there is nobody to repay, so `payerMissing` is set and
  * the trip is never paid out or combined (the settlement would otherwise name another roommate as payer).
  */
-export function tripPaymentStatus(trip: Trip, household: Household, paid: PaidShares) {
+export function tripPaymentStatus(
+  trip: Trip,
+  household: Household,
+  paid: PaidShares,
+  summary?: TripSettlementSummary
+) {
   const payerMissing = !household.participants.some((p) => p.id === trip.payerId);
   const debts: TripDebt[] = payerMissing
     ? []
-    : calculateTripSettlement(trip, household)
+    : (summary ?? calculateTripSettlement(trip, household))
         .participants.filter((s) => !s.isPayer && s.netOwed > 0)
         .map((s) => {
           const owedCents = Math.round(s.netOwed * 100);
@@ -60,17 +65,28 @@ export function tripPaymentStatus(trip: Trip, household: Household, paid: PaidSh
   };
 }
 
+/** Shared across filtering, combining and marking paid for one immutable input set. */
+export function createTripStatusLookup(household: Household, paid: PaidShares) {
+  const cache = new WeakMap<Trip, ReturnType<typeof tripPaymentStatus>>();
+  return (trip: Trip) => {
+    let status = cache.get(trip);
+    if (!status) { status = tripPaymentStatus(trip, household, paid); cache.set(trip, status); }
+    return status;
+  };
+}
+
 /** Trips with confirmed items that someone still owes on. Hidden trips stay out, as they do from exports. */
 export function selectUnpaidTrips(
   trips: readonly Trip[],
   household: Household,
   paid: PaidShares,
-  hiddenIds: readonly string[]
+  hiddenIds: readonly string[],
+  statusFor = (trip: Trip) => tripPaymentStatus(trip, household, paid)
 ): Trip[] {
   const hidden = new Set(hiddenIds);
   return trips.filter((trip) => {
     if (!trip || trip.status === 'review' || hidden.has(trip.id)) return false;
-    const status = tripPaymentStatus(trip, household, paid);
+    const status = statusFor(trip);
     return !status.payerMissing && !status.isPaidOut;
   });
 }
@@ -97,7 +113,10 @@ function paymentNote(trips: readonly CombinedTripShare[]): string {
  * is netted out of the larger one. Amounts are summed in whole cents so the combined figure
  * matches the per-trip figures exactly.
  */
-export function combineUnpaidBalances(trips: readonly Trip[], household: Household, paid: PaidShares = {}): CombinedPayment[] {
+export function combineUnpaidBalances(
+  trips: readonly Trip[], household: Household, paid: PaidShares = {},
+  statusFor = (trip: Trip) => tripPaymentStatus(trip, household, paid)
+): CombinedPayment[] {
   const byId = new Map(household.participants.map((p) => [p.id, p]));
   // Keyed by "a|b" with a < b; positive cents mean a owes b.
   type PairTrip = Omit<CombinedTripShare, 'amount'> & { cents: number };
@@ -106,7 +125,7 @@ export function combineUnpaidBalances(trips: readonly Trip[], household: Househo
 
   for (const trip of trips) {
     const payerId = trip.payerId;
-    const status = tripPaymentStatus(trip, household, paid);
+    const status = statusFor(trip);
     if (status.payerMissing) continue;
 
     for (const debt of status.unpaid) {

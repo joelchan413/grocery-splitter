@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import {
+  getTripTimestamp,
   loadHousehold,
   saveHousehold,
   loadActiveTrip,
@@ -33,18 +35,22 @@ import {
 } from '@/lib/payments';
 import { Household, Trip } from '@/types';
 import { useTripSync } from '@/hooks/useTripSync';
+import { nextTripTimestamp, sameTripData, type TripSyncUpdate } from '@/lib/trip-sync';
 import { Header } from '@/components/Header';
-import { HouseholdModal } from '@/components/HouseholdModal';
-import { SettingsModal } from '@/components/SettingsModal';
-import { ShareTripModal } from '@/components/ShareTripModal';
-import { IdentifyModal } from '@/components/IdentifyModal';
 import { ReceiptScanner } from '@/components/ReceiptScanner';
-import { ReceiptReview } from '@/components/ReceiptReview';
 import { ReceiptPhotos } from '@/components/ReceiptPhotos';
-import { ClaimingBoard } from '@/components/ClaimingBoard';
-import { SettlementView } from '@/components/SettlementView';
-import { TripHistory } from '@/components/TripHistory';
-import { SettleUp } from '@/components/SettleUp';
+
+// Load secondary screens and dialogs only when they are opened.
+const loadingView = () => <p role="status" className="p-6 text-sm text-slate-500">Loading…</p>;
+const HouseholdModal = dynamic(() => import('@/components/HouseholdModal').then((mod) => mod.HouseholdModal), { loading: loadingView });
+const SettingsModal = dynamic(() => import('@/components/SettingsModal').then((mod) => mod.SettingsModal), { loading: loadingView });
+const ShareTripModal = dynamic(() => import('@/components/ShareTripModal').then((mod) => mod.ShareTripModal), { loading: loadingView });
+const IdentifyModal = dynamic(() => import('@/components/IdentifyModal').then((mod) => mod.IdentifyModal), { loading: loadingView });
+const ReceiptReview = dynamic(() => import('@/components/ReceiptReview').then((mod) => mod.ReceiptReview), { loading: loadingView });
+const ClaimingBoard = dynamic(() => import('@/components/ClaimingBoard').then((mod) => mod.ClaimingBoard), { loading: loadingView });
+const SettlementView = dynamic(() => import('@/components/SettlementView').then((mod) => mod.SettlementView), { loading: loadingView });
+const TripHistory = dynamic(() => import('@/components/TripHistory').then((mod) => mod.TripHistory), { loading: loadingView });
+const SettleUp = dynamic(() => import('@/components/SettleUp').then((mod) => mod.SettleUp), { loading: loadingView });
 
 type AppView = 'scanner' | 'review' | 'claiming' | 'settlement' | 'history' | 'settle-up';
 
@@ -72,7 +78,13 @@ async function fetchPaidShares(): Promise<PaidShares | null> {
 
 export default function Home() {
   const [household, setHousehold] = useState<Household>(DEFAULT_HOUSEHOLD);
-  const [activeTrip, setActiveTrip] = useState<Trip | null>(null);
+  const [activeTrip, setActiveTripState] = useState<Trip | null>(null);
+  // Sync callbacks can run several times before React renders the next frame.
+  const activeTripRef = useRef<Trip | null>(null);
+  const setActiveTrip = useCallback((next: Trip | null) => {
+    activeTripRef.current = next;
+    setActiveTripState(next);
+  }, []);
   const [activeParticipantId, setActiveParticipantId] = useState<string>('p1');
   const [view, setView] = useState<AppView>('scanner');
   const [isHouseholdModalOpen, setIsHouseholdModalOpen] = useState(false);
@@ -93,6 +105,9 @@ export default function Home() {
   // Saves go to the server one at a time, so replies can't arrive out of order. `paymentSave` counts saves started,
   // so a refresh or the startup read can tell that a save began while it was loading, and drop its result.
   const paymentSave = useRef(0);
+  const householdSave = useRef(0);
+  const hiddenSave = useRef(0);
+  const pendingHiddenSaves = useRef(0);
   const paymentQueue = useRef<Promise<unknown>>(Promise.resolve());
   // Changes shown on screen but not yet confirmed, in the order they were made.
   const pendingPayments = useRef<{ apply: (prev: PaidShares) => PaidShares }[]>([]);
@@ -115,27 +130,19 @@ export default function Home() {
     setView(next);
   }, []);
 
-  // Callback when server-side SSE sends an updated trip
-  const handleTripUpdatedFromServer = useCallback((serverTrip: Trip) => {
-    setActiveTrip((prev) => {
-      if (!prev || prev.id !== serverTrip.id) {
-        return prev;
-      }
-      // If local state has a newer timestamp than the incoming server packet,
-      // protect local optimistic claims from being overwritten by stale server packets.
-      if (prev.updatedAt && serverTrip.updatedAt) {
-        const localTime = new Date(prev.updatedAt).getTime();
-        const serverTime = new Date(serverTrip.updatedAt).getTime();
-        if (localTime > serverTime) {
-          return prev;
-        }
-      }
-      saveActiveTrip(serverTrip);
-      addOrUpdateTripHistory(serverTrip);
-      return serverTrip;
-    });
-    setTripHistory(loadTripHistory());
-  }, []);
+  // Apply optimistic edits and server updates through one persistence path.
+  const handleTripUpdatedFromServer = useCallback((serverTrip: TripSyncUpdate) => {
+    const prev = activeTripRef.current;
+    if (!prev || prev.id !== serverTrip.id) return;
+    // Protect newer local claims from stale server packets.
+    if (prev.updatedAt && serverTrip.updatedAt && Date.parse(prev.updatedAt) > Date.parse(serverTrip.updatedAt)) return;
+    const complete: Trip = { ...serverTrip, receiptImages: serverTrip.receiptImages ?? prev.receiptImages };
+    // SSE and the PATCH response can describe the exact same save.
+    if (sameTripData(prev, complete)) return;
+    setActiveTrip(complete);
+    saveActiveTrip(complete, { authoritative: true });
+    setTripHistory(addOrUpdateTripHistory(complete));
+  }, [setActiveTrip]);
 
   // Real-time synchronization hook
   const { broadcastTripUpdate } = useTripSync({
@@ -169,13 +176,15 @@ export default function Home() {
     async function init() {
       // Load local state as fast initial fallback
       const savedHousehold = loadHousehold();
-      const savedTrip = loadActiveTrip();
+      const savedTrip = await loadActiveTrip();
       const savedHistory = loadTripHistory();
+      saveTripHistory(savedHistory);
       const savedActiveP = loadActiveParticipantId();
       const initialized = isHouseholdInitialized();
 
       setHousehold(savedHousehold);
       setActiveTrip(savedTrip);
+      if (savedTrip) saveActiveTrip(savedTrip);
       setTripHistory(savedHistory);
       setActiveParticipantId(savedActiveP);
       setHiddenTripIds(loadHiddenTripIds());
@@ -193,9 +202,8 @@ export default function Home() {
           if (res.ok) {
             const serverTrip: Trip = await res.json();
             setActiveTrip(serverTrip);
-            saveActiveTrip(serverTrip);
-            addOrUpdateTripHistory(serverTrip);
-            setTripHistory(loadTripHistory());
+            saveActiveTrip(serverTrip, { authoritative: true });
+            setTripHistory(addOrUpdateTripHistory(serverTrip));
             navigate(serverTrip.status === 'review' ? 'review' : serverTrip.status === 'settled' ? 'settlement' : 'claiming');
 
             // Prompt roommate identification if first time on this device
@@ -207,13 +215,18 @@ export default function Home() {
           console.error('Error joining shared trip:', e);
         }
       } else if (savedTrip) {
-        // Ensure server has this active trip registered
+        // Restore missing or newer local edits, without re-uploading all receipt
+        // photos and rewriting the database on every visit to an unchanged trip.
         try {
-          await fetch('/api/trips', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(savedTrip),
-          });
+          const res = await fetch(`/api/trips/${encodeURIComponent(savedTrip.id)}`, { method: 'HEAD', cache: 'no-store' });
+          const serverTime = Date.parse(res.headers.get('X-Trip-Updated-At') || '');
+          if (res.status === 404 || (res.ok && (!Number.isFinite(serverTime) || getTripTimestamp(savedTrip) > serverTime))) {
+            await fetch('/api/trips', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(savedTrip),
+            });
+          }
         } catch {}
 
         if (savedTrip.status === 'review') {
@@ -230,6 +243,10 @@ export default function Home() {
         setIsFirstTimeSetup(true);
       }
 
+      // Returning households can use their cached state while the server refreshes.
+      // First-time setup still waits for the shared household to avoid editing defaults.
+      if (initialized) setIsHydrated(true);
+
       // Sync latest household and history from server
       try {
         const [hhRes, histRes, serverHidden, serverPaid] = await Promise.all([
@@ -238,15 +255,17 @@ export default function Home() {
           fetchHiddenTripIds(),
           fetchPaidShares(),
         ]);
-        if (serverHidden) setHiddenTripIds(serverHidden);
+        if (serverHidden && hiddenSave.current === 0) setHiddenTripIds(serverHidden);
         if (serverPaid && paymentSave.current === 0) {
           confirmedPaidShares.current = serverPaid;
           setPaidShares(serverPaid);
         }
         if (hhRes.ok) {
           const serverHousehold: Household = await hhRes.json();
-          setHousehold(serverHousehold);
-          saveHousehold(serverHousehold);
+          if (householdSave.current === 0) {
+            setHousehold(serverHousehold);
+            saveHousehold(serverHousehold);
+          }
         }
         if (histRes.ok) {
           const serverHistory: Trip[] = await histRes.json();
@@ -263,10 +282,11 @@ export default function Home() {
     }
 
     init();
-  }, [navigate, setPaidShares]);
+  }, [navigate, setPaidShares, setActiveTrip]);
 
   // Update household locally and on server
   const handleUpdateHousehold = async (updated: Household) => {
+    householdSave.current++;
     setHousehold(updated);
     saveHousehold(updated);
     setHouseholdInitialized(true);
@@ -288,14 +308,12 @@ export default function Home() {
 
   // Update trip locally and broadcast to connected roommates
   const handleUpdateTrip = (updated: Trip) => {
+    // Local taps must advance the current revision even when this phone's clock
+    // is behind the server. The stale-server guard must never discard an edit.
     const tripWithTimestamp: Trip = {
       ...updated,
-      updatedAt: new Date().toISOString(),
+      updatedAt: nextTripTimestamp(activeTripRef.current ?? updated),
     };
-    setActiveTrip(tripWithTimestamp);
-    saveActiveTrip(tripWithTimestamp);
-    addOrUpdateTripHistory(tripWithTimestamp);
-    setTripHistory(loadTripHistory());
     broadcastTripUpdate(tripWithTimestamp);
   };
 
@@ -305,6 +323,8 @@ export default function Home() {
   };
 
   const handleToggleHiddenTrip = async (tripId: string) => {
+    hiddenSave.current++;
+    pendingHiddenSaves.current++;
     const hidden = !hiddenTripIds.includes(tripId);
     const withChange = (ids: string[], hide: boolean) =>
       hide ? (ids.includes(tripId) ? ids : [...ids, tripId]) : ids.filter((id) => id !== tripId);
@@ -323,6 +343,8 @@ export default function Home() {
       // Roll back so this device never disagrees with the shared list, which also drives exports.
       setHiddenTripIds((prev) => withChange(prev, !hidden));
       setSaveError('Could not hide or unhide that trip on the shared server. Please try again.');
+    } finally {
+      pendingHiddenSaves.current--;
     }
   };
 
@@ -423,9 +445,8 @@ export default function Home() {
 
   const handleTripScanned = async (newTrip: Trip) => {
     setActiveTrip(newTrip);
-    saveActiveTrip(newTrip);
-    addOrUpdateTripHistory(newTrip);
-    setTripHistory(loadTripHistory());
+    saveActiveTrip(newTrip, { authoritative: true });
+    setTripHistory(addOrUpdateTripHistory(newTrip));
     navigate('review');
 
     // Save to server database immediately
@@ -455,10 +476,9 @@ export default function Home() {
     const settledTrip: Trip = {
       ...activeTrip,
       status: 'settled',
-      updatedAt: new Date().toISOString(),
+      updatedAt: nextTripTimestamp(activeTrip),
     };
-    archiveTrip(settledTrip);
-    setTripHistory(loadTripHistory());
+    setTripHistory(archiveTrip(settledTrip));
     setActiveTrip(null);
     saveActiveTrip(null);
     window.history.replaceState({}, '', window.location.pathname);
@@ -487,7 +507,7 @@ export default function Home() {
       const trip = await loadTripDetails(selected);
       if (request !== openRequest.current) return;
       setActiveTrip(trip);
-      saveActiveTrip(trip);
+      saveActiveTrip(trip, { authoritative: true });
       navigate(trip.status === 'review' ? 'review' : trip.status === 'settled' ? 'settlement' : 'claiming');
     } catch {
       if (request === openRequest.current) setHistoryError('Could not open this trip. Please try again.');
@@ -501,8 +521,9 @@ export default function Home() {
     const request = ++historyRequest.current;
     setHistoryRefreshing(true);
     setHistoryError(null);
-    fetchHiddenTripIds().then((ids) => {
-      if (ids) setHiddenTripIds(ids);
+    const hiddenVersion = hiddenSave.current;
+    if (pendingHiddenSaves.current === 0) fetchHiddenTripIds().then((ids) => {
+      if (ids && hiddenVersion === hiddenSave.current && pendingHiddenSaves.current === 0) setHiddenTripIds(ids);
     });
     refreshPaidShares();
     try {
@@ -655,12 +676,12 @@ export default function Home() {
         onSave={handleUpdateHousehold}
       />}
 
-      <SettingsModal
+      {isSettingsModalOpen && <SettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
-      />
+      />}
 
-      {activeTrip && (
+      {isShareModalOpen && activeTrip && (
         <ShareTripModal
           isOpen={isShareModalOpen}
           trip={activeTrip}
@@ -669,14 +690,14 @@ export default function Home() {
         />
       )}
 
-      <IdentifyModal
+      {isIdentifyModalOpen && <IdentifyModal
         isOpen={isIdentifyModalOpen}
         household={household}
         onSelect={(pId) => {
           handleSelectParticipant(pId);
           setIsIdentifyModalOpen(false);
         }}
-      />
+      />}
     </div>
   );
 }

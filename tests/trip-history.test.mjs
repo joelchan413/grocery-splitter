@@ -28,6 +28,8 @@ function loadModule(relPath) {
     if (name === '@/lib/calculations') return loadModule('../src/lib/calculations.ts');
     if (name === '@/lib/trip-history') return loadModule('../src/lib/trip-history.ts');
     if (name === '@/lib/person') return loadModule('../src/lib/person.ts');
+    if (name === '@/lib/payments') return loadModule('../src/lib/payments.ts');
+    if (name === '@/lib/combined-balances') return loadModule('../src/lib/combined-balances.ts');
     if (name === './Avatar') return loadModule('../src/components/Avatar.tsx');
     if (name === './ScannerHome') return loadModule('../src/components/ScannerHome.tsx');
     if (name === 'canvas-confetti') return { __esModule: true, default: () => {} };

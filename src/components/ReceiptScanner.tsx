@@ -4,7 +4,7 @@
 import { useState, useRef, type ChangeEvent } from 'react';
 import { Camera, Upload, X, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
 import type { Household, Trip } from '@/types';
-import { SAMPLE_RECEIPTS, type ParsedReceiptData } from '@/lib/receipts';
+import type { ParsedReceiptData } from '@/lib/receipts';
 import { readReceiptResponse } from '@/lib/receipt-response';
 import { ScannerHome } from './ScannerHome';
 import { Avatar, personStyle } from './Avatar';
@@ -44,7 +44,7 @@ export function ReceiptScanner({ household, onTripScanned, history, onOpenTrip, 
     }
   };
 
-  const constructAndEmitTrip = (parsed: ParsedReceiptData, receiptImages = images) => {
+  const constructAndEmitTrip = (parsed: ParsedReceiptData) => {
     const now = Date.now();
     onTripScanned({
       id: `trip-${now}`,
@@ -55,7 +55,7 @@ export function ReceiptScanner({ household, onTripScanned, history, onOpenTrip, 
       items: parsed.items.map((item, index) => ({ ...item, id: item.id || `item-${now}-${index}` })),
       taxTotal: parsed.taxTotal || 0,
       basketDiscount: parsed.basketDiscount || 0,
-      receiptImages,
+      receiptImages: images,
       claims: {},
       readyParticipantIds: [],
       status: 'review',
@@ -73,7 +73,7 @@ export function ReceiptScanner({ household, onTripScanned, history, onOpenTrip, 
       });
       constructAndEmitTrip(await readReceiptResponse(response));
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Could not scan this receipt. Try another photo or a sample receipt.');
+      setErrorMessage(error instanceof Error ? error.message : 'Could not scan this receipt. Try another photo.');
     } finally {
       setIsProcessing(false);
     }
@@ -116,16 +116,7 @@ export function ReceiptScanner({ household, onTripScanned, history, onOpenTrip, 
     <p className="scan-processing-note" role="status" aria-live="polite">{isProcessing ? 'Reading items and prices. This can take up to two minutes.' : 'You can check every item before sharing with roommates.'}</p>
   </>;
 
-  const samples = <>
-    <div className="scan-samples-heading"><h2 className="scan-section-title">Try a sample receipt</h2><p className="scan-section-note">See how a split works before uploading.</p></div>
-    <div className="scan-sample-list">
-      {SAMPLE_RECEIPTS.map(sample => <button type="button" key={sample.id} disabled={isProcessing} className="scan-sample" onClick={() => constructAndEmitTrip(sample.data, [])}>
-        <span>{sample.data.storeName}<small>{sample.data.items.length} items</small></span>
-        <span className="scan-sample-action">Open sample <ArrowRight size={16} aria-hidden="true" /></span>
-      </button>)}
-    </div>
-  </>;
   const error = errorMessage && <div role="alert" className="scan-error"><AlertCircle size={18} aria-hidden="true" /><span>{errorMessage}</span></div>;
-  return <ScannerHome payer={payer} upload={upload} samples={samples} error={error}
+  return <ScannerHome payer={payer} upload={upload} error={error}
     household={household} history={history} onOpenTrip={onOpenTrip} onOpenHistory={onOpenHistory} />;
 }

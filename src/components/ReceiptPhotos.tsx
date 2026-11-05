@@ -25,7 +25,7 @@ export function ReceiptPhotos({ trip }: { trip: Trip }) {
     const store = trip.storeName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'receipt';
     return `${store}-${trip.date}-receipt-${index + 1}.${extension === 'jpeg' ? 'jpg' : extension}`;
   };
-  // Sample runs and older trips have no photos, so there's nothing to show.
+  // Older trips may have no photos, so there's nothing to show.
   if (images.length === 0) return null;
 
   const actionClass = 'btn btn-quiet';

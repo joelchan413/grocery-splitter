@@ -120,7 +120,7 @@ export function TripHistory({
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
           <h2 className="text-base font-medium text-slate-900">No runs yet</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Scan a receipt or open a sample, and it shows up here.
+            Scan a receipt, and it shows up here.
           </p>
         </div>
       ) : (

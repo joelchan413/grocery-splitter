@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { DEFAULT_HOUSEHOLD } from '../src/lib/storage';
-import { SAMPLE_RECEIPTS } from '../src/lib/receipts';
 import type { Trip } from '../src/types';
+import { scanReceipt, TRADER_JOES, COSTCO } from './fixtures/receipts';
 
 test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
   test.beforeEach(async ({ page, request }) => {
@@ -75,8 +75,8 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
     // Dismiss wizard
     await page.getByRole('button', { name: /Save and start splitting/i }).click();
 
-    // Select Sample Costco Receipt
-    await page.getByText(/Costco Wholesale/i).click();
+    // Scan Costco receipt (mocked)
+    await scanReceipt(page, COSTCO);
 
     // Verify Review Screen loaded with Costco data
     await expect(page.getByRole('heading', { name: 'Check receipt items' })).toBeVisible();
@@ -86,7 +86,7 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
     // Modify store name
     await storeInput.fill('Costco Club');
 
-    // Count line items (Costco sample has 6 items)
+    // Count line items (Costco fixture has 6 items)
     await expect(page.getByRole('heading', { name: 'Items (6)' })).toBeVisible();
 
     // Add a new line item
@@ -120,8 +120,8 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
     // Dismiss wizard
     await page.getByRole('button', { name: /Save and start splitting/i }).click();
 
-    // Select Trader Joe's Run
-    await page.getByRole('button', { name: /Trader Joe's.*Open sample/i }).click();
+    // Scan Trader Joe's receipt (mocked)
+    await scanReceipt(page, TRADER_JOES);
     await page.getByRole('button', { name: /Open for Roommate Claims/i }).click();
 
     // Joel claims Whole Milk
@@ -183,7 +183,7 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
     await page.getByRole('button', { name: /Save and start splitting/i }).click();
 
     // 1. Scan and archive Trip 1: Trader Joe's
-    await page.getByRole('button', { name: /Trader Joe's.*Open sample/i }).click();
+    await scanReceipt(page, TRADER_JOES);
     await page.getByRole('button', { name: /Open for Roommate Claims/i }).click();
     await page.getByRole('button', { name: /View breakdown|View balances/i }).first().click();
     await page.getByRole('button', { name: /Finish and archive/i }).click();
@@ -197,7 +197,7 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
     await expect(page.getByRole('heading', { name: 'New grocery run' })).toBeVisible();
 
     // Scan Trip 2: Costco Wholesale
-    await page.getByText(/Costco Wholesale/i).click();
+    await scanReceipt(page, COSTCO);
     await page.getByRole('button', { name: /Open for Roommate Claims/i }).click();
     await page.getByRole('button', { name: /View breakdown|View balances/i }).first().click();
     await page.getByRole('button', { name: /Finish and archive/i }).click();
@@ -224,7 +224,7 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
 test('history API omits photo bytes while trip details and legacy history keep them', async ({ request }) => {
   const full: Trip = {
     id: `history-api-${Date.now()}`, householdId: DEFAULT_HOUSEHOLD.id, storeName: 'API photo market',
-    date: '2026-11-04', payerId: 'p1', items: SAMPLE_RECEIPTS[0].data.items,
+    date: '2026-11-04', payerId: 'p1', items: TRADER_JOES.items,
     taxTotal: 0, basketDiscount: 0, receiptImages: [`data:image/png;base64,${Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0]).toString('base64')}`],
     claims: {}, readyParticipantIds: [], status: 'settled', createdAt: new Date().toISOString(), updatedAt: '2026-11-04T12:00:00Z',
   };

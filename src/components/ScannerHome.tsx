@@ -9,7 +9,6 @@ import { Avatar } from './Avatar';
 export interface ScannerParts {
   payer: ReactNode;
   upload: ReactNode;
-  samples: ReactNode;
   error: ReactNode;
   household: Household;
   history?: Trip[];
@@ -29,7 +28,7 @@ export function formatRunDate(date: string) {
   return Number.isNaN(parsed.getTime()) ? date : parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-export function ScannerHome({ payer, upload, samples, error, household, history = [], onOpenTrip, onOpenHistory }: ScannerParts) {
+export function ScannerHome({ payer, upload, error, household, history = [], onOpenTrip, onOpenHistory }: ScannerParts) {
   const runs = useMemo(() => sortTripHistory(history), [history]);
   const lastRun = runs[0];
   const openRuns = runs.filter(trip => trip.status !== 'settled').length;
@@ -101,8 +100,6 @@ export function ScannerHome({ payer, upload, samples, error, household, history 
               </ul>
             </>}
           </section>
-
-          <section className="scanner-card scanner-samples">{samples}</section>
         </div>
       </div>
     </div>

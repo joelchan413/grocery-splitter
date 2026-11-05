@@ -1,4 +1,5 @@
 import type { Trip } from '@/types';
+import { loadCachedTrip } from '@/lib/trip-cache';
 
 function getHistoryTimestamp(trip: Trip): number {
   // Updates and settlements must not move an existing trip in the archive.
@@ -12,12 +13,12 @@ function getHistoryTimestamp(trip: Trip): number {
 }
 
 export function sortTripHistory(history: readonly Trip[]): Trip[] {
-  return [...history].sort((a, b) => {
-    const difference = getHistoryTimestamp(b) - getHistoryTimestamp(a);
+  return history.map((trip) => ({ trip, timestamp: getHistoryTimestamp(trip) })).sort((a, b) => {
+    const difference = b.timestamp - a.timestamp;
     if (difference !== 0) return difference;
     // Use a locale-independent tie-breaker, including for trips without dates.
-    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-  });
+    return a.trip.id < b.trip.id ? -1 : a.trip.id > b.trip.id ? 1 : 0;
+  }).map(({ trip }) => trip);
 }
 
 /** Leaves the data needed for balances and CSV exports, without embedding receipt photos. */
@@ -28,11 +29,18 @@ export function summarizeTrip(trip: Trip): Trip {
 /** Summaries are display-only; always retrieve the complete trip before editing or exporting photos. */
 export async function loadTripDetails(trip: Trip): Promise<Trip> {
   if (!trip.receiptImagesOmitted) return trip;
-  const response = await fetch(`/api/trips/${encodeURIComponent(trip.id)}`, { cache: 'no-store' });
-  if (!response.ok) throw new Error('Could not load the trip. Please try again.');
-  const full: Trip = await response.json();
-  if (!full || full.id !== trip.id || full.receiptImagesOmitted || !Array.isArray(full.items) || (full.receiptImages != null && !Array.isArray(full.receiptImages))) {
-    throw new Error('Could not load the complete trip. Please try again.');
+  try {
+    const response = await fetch(`/api/trips/${encodeURIComponent(trip.id)}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error('Could not load the trip. Please try again.');
+    const full: Trip = await response.json();
+    if (!full || full.id !== trip.id || full.receiptImagesOmitted || !Array.isArray(full.items) || (full.receiptImages != null && !Array.isArray(full.receiptImages))) {
+      throw new Error('Could not load the complete trip. Please try again.');
+    }
+    return { ...full, receiptImages: full.receiptImages ?? [] };
+  } catch (error) {
+    // Offline history can still open the last complete snapshot saved on this
+    // device. Never combine fresh metadata with a different version's photos.
+    try { const cached = await loadCachedTrip(trip.id); if (cached) return cached; } catch {}
+    throw error;
   }
-  return { ...full, receiptImages: full.receiptImages ?? [] };
 }

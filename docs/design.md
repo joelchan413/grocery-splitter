@@ -45,7 +45,7 @@ The shell is an open plane. The sidebar breakpoint is `68.8125rem` (1101px at th
 - **Below 1101px:** the same items fold into a 64px top bar.
 - **Below 431px:** New trip shows as an icon, and the household name replaces the wordmark. Both accessible names stay.
 
-Each screen has its own address, `?view=history`, `?view=claiming` and so on, so Back, Forward and reload behave like any web page. Trip screens also carry `&trip=<id>`, so Back after opening another trip returns to the right one. A `trip` that matches the run already open on this phone is a reload; any other is someone joining from a shared link. A bare address resumes the open trip on launch, so the new-run screen shown beside an open trip is `?view=scanner`. A trip screen opened without its trip falls back to a new run, and Back or Forward closes any open dialog.
+Each screen has its own address, `?view=history`, `?view=claiming` and so on, so Back, Forward and reload behave like any web page. Trip screens also carry `&trip=<id>`, so Back after opening another trip returns to the right one. A `trip` that matches the run already open on this phone is a reload; any other is someone joining from a shared link. A bare address resumes the open trip on launch, so the new-run screen shown beside an open trip is `?view=scanner`. A trip screen whose trip isn't available on this phone falls back to a new run; one with no `trip` in its address opens the run already open here, and Back or Forward closes any open dialog.
 
 ## Screens
 

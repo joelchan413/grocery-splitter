@@ -202,7 +202,9 @@ export function ClaimingBoard({
       {/* One row per item. Rows the chosen roommate claimed take their colour. */}
       <h2 className="sr-only">Items</h2>
       <ul className="claim-list card overflow-hidden" style={personStyle(activeParticipant)}>
-        {trip.items.map((item) => {
+        {trip.items.map((item, index) => {
+          // Controls name their item; an item whose name was cleared falls back to its place in the list.
+          const itemLabel = item.name.trim() || `item ${index + 1}`;
           // Claims from people no longer in the household don't count, matching the settlement.
           const itemClaims = Object.fromEntries(
             Object.entries(trip.claims[item.id] || {}).filter(([pId]) => household.participants.some((p) => p.id === pId))
@@ -240,7 +242,7 @@ export function ClaimingBoard({
                     onClick={() => handleToggleSingleClaim(item.id)}
                     aria-pressed={mine}
                     // Every row has these buttons, so each name starts with its visible label, then says which item.
-                    aria-label={`${mine ? (totalClaimedQty > 1 ? `Split (1/${totalClaimedQty})` : 'Mine') : totalClaimedQty > 0 ? 'Join split' : 'Claim'}: ${item.name}`}
+                    aria-label={`${mine ? (totalClaimedQty > 1 ? `Split (1/${totalClaimedQty})` : 'Mine') : totalClaimedQty > 0 ? 'Join split' : 'Claim'}: ${itemLabel}`}
                     className={`btn btn-sm min-w-[5.5rem] ${mine ? 'btn-claimed' : 'btn-secondary'}`}
                   >
                     {mine ? (
@@ -257,10 +259,10 @@ export function ClaimingBoard({
                   <div className={`claim-stepper${mine ? ' is-mine' : ''}`}>
                     <button
                       type="button"
-                      onClick={() => handleSetQuantityClaim(item.id, selfClaimedQty - 1, item.quantity, item.name)}
+                      onClick={() => handleSetQuantityClaim(item.id, selfClaimedQty - 1, item.quantity, itemLabel)}
                       disabled={selfClaimedQty === 0}
                       title="Claim one fewer"
-                      aria-label={`Claim one fewer ${item.name}`}
+                      aria-label={`Claim one fewer ${itemLabel}`}
                     >
                       <Minus aria-hidden="true" />
                     </button>
@@ -269,10 +271,10 @@ export function ClaimingBoard({
                     </span>
                     <button
                       type="button"
-                      onClick={() => handleSetQuantityClaim(item.id, selfClaimedQty + 1, item.quantity, item.name)}
+                      onClick={() => handleSetQuantityClaim(item.id, selfClaimedQty + 1, item.quantity, itemLabel)}
                       disabled={selfClaimedQty >= item.quantity || (totalClaimedQty >= item.quantity && selfClaimedQty === 0)}
                       title="Claim one more"
-                      aria-label={`Claim one more ${item.name}`}
+                      aria-label={`Claim one more ${itemLabel}`}
                     >
                       <Plus aria-hidden="true" />
                     </button>
@@ -313,7 +315,7 @@ export function ClaimingBoard({
                       type="button"
                       onClick={() => handleResetItemClaims(item.id)}
                       // Sits before Split all, so the two row actions line up at the end of every row.
-                      aria-label={`Reset to shared: ${item.name}`}
+                      aria-label={`Reset to shared: ${itemLabel}`}
                       className="btn btn-quiet btn-sm ml-auto text-[13px]!"
                     >
                       Reset to shared
@@ -327,7 +329,7 @@ export function ClaimingBoard({
                     onClick={() => handleSplitWithAll(item.id, item.quantity)}
                     className="btn btn-quiet btn-sm -mr-2 text-[13px]!"
                     title="Split equally across all roommates"
-                    aria-label={`Split all: ${item.name}`}
+                    aria-label={`Split all: ${itemLabel}`}
                   >
                     Split all
                   </button>

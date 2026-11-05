@@ -276,7 +276,9 @@ button.trip-step:hover { background: var(--active); color: var(--text); }
 @media (pointer: coarse) {
   .btn-sm { min-height: 40px; }
   .btn-icon.btn-sm { width: 40px; }
-  .claim-stepper button { width: 38px; height: 38px; }
+  .claim-stepper button { width: 40px; height: 40px; }
+  .back-link { min-height: 40px; }
+  button.trip-step { min-height: 40px; }
   .tax-toggle { min-height: 40px; }
 }
 .tag-taxed { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 6px; background: #fff4d6; color: #7a4a00; font-size: 12px; font-weight: 500; vertical-align: 2px; }

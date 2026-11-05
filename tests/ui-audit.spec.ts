@@ -44,7 +44,7 @@ test.describe('GrocerySplit Complete User Flow and UI Audit', () => {
     await expect(page.getByRole('heading', { name: /^Items \(\d+\)$/ })).toBeVisible();
 
     // Toggle tax on an item
-    const exemptBadge = page.getByRole('button', { name: 'Not taxed', exact: true }).first();
+    const exemptBadge = page.getByRole('button', { name: /^Taxed:/, pressed: false }).first();
     await exemptBadge.click();
 
     // Click "Open for Roommate Claims"
@@ -61,8 +61,8 @@ test.describe('GrocerySplit Complete User Flow and UI Audit', () => {
     await page.getByRole('button', { name: 'Close', exact: true }).click();
 
     // Joel (Active by default) claims first item
-    await page.getByRole('button', { name: /^Claim$/i }).first().click();
-    await expect(page.getByRole('button', { name: /^Mine$/i }).first()).toBeVisible();
+    await page.getByRole('button', { name: /^Claim:/i }).first().click();
+    await expect(page.getByRole('button', { name: /^Mine:/i }).first()).toBeVisible();
 
     // Switch to Alex
     await page.getByRole('button', { name: /Alex/i }).first().click();
@@ -72,8 +72,9 @@ test.describe('GrocerySplit Complete User Flow and UI Audit', () => {
     // Verify that the button now shows split indicator
     await expect(page.getByText(/Split \(1\/2\)/i)).toBeVisible();
     // Verify that the claimed badge row reflects split price
-    await expect(page.locator('span').filter({ hasText: /^Joel$/ })).toBeVisible();
-    await expect(page.locator('span').filter({ hasText: /^Alex$/ })).toBeVisible();
+    const claimants = page.locator('.claim-chip');
+    await expect(claimants.filter({ hasText: /^JJoel/ }).first()).toBeVisible();
+    await expect(claimants.filter({ hasText: /^AAlex/ }).first()).toBeVisible();
 
     // Alex marks done
     await page.getByRole('button', { name: /I'm Done Claiming/i }).click();
@@ -81,7 +82,9 @@ test.describe('GrocerySplit Complete User Flow and UI Audit', () => {
 
     // Switch to Sam
     await page.getByRole('button', { name: /Sam/i }).first().click();
-    await page.getByRole('button', { name: /Split All/i }).nth(1).click();
+    // Split all only shows on rows someone has claimed: here, the item Joel and Alex share.
+    await page.getByRole('button', { name: /Split All/i }).first().click();
+    await expect(page.getByText(/Split \(1\/4\)/i)).toBeVisible();
     await page.getByRole('button', { name: /I'm Done Claiming/i }).click();
 
     // Switch to Jordan

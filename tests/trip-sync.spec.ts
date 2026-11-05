@@ -148,7 +148,7 @@ for (const recover of [false, true]) {
     await page.evaluate(() => { window.activeWrites = 0; });
     const saved = page.waitForResponse((r) => r.url().includes(`/api/trips/${trip.id}`) && r.request().method() === 'PATCH');
     const retry = recover ? page.waitForResponse((r) => r.url().endsWith(`/api/trips/${trip.id}`) && r.request().method() === 'PATCH') : null;
-    await page.getByRole('button', { name: /^Claim$/ }).first().click();
+    await page.getByRole('button', { name: /^Claim:/ }).first().click();
     const response = await saved;
     expect(response.request().postDataJSON()).not.toHaveProperty('receiptImages');
     if (recover) expect(response.status()).toBe(409);
@@ -164,7 +164,7 @@ for (const recover of [false, true]) {
     const writes = await page.evaluate(() => window.activeWrites);
     expect(writes).toBeGreaterThanOrEqual(1);
     expect(writes).toBeLessThanOrEqual(2);
-    await expect(roommate.getByRole('button', { name: /^Mine$/ }).first()).toBeVisible();
+    await expect(roommate.getByRole('button', { name: /^Mine:/ }).first()).toBeVisible();
     for (const tab of [page, roommate]) {
       await expect.poll(() => readCachedTrip(tab).then((trip) => trip?.receiptImages)).toEqual([photo]);
       await expect(tab.getByText('Receipt photos (1)', { exact: true })).toBeVisible();
@@ -313,10 +313,10 @@ test('local claims remain optimistic and durable when the phone clock is behind 
   await page.route(`**/api/trips/${trip.id}*`, (route) => route.request().method() === 'PATCH' ? route.abort() : route.continue());
   await page.goto(`/?trip=${trip.id}`);
   await expect(page.getByRole('heading', { name: trip.storeName, level: 1 })).toBeVisible();
-  await page.getByRole('button', { name: /^Claim$/ }).first().click();
-  await expect(page.getByRole('button', { name: /^Mine$/ })).toHaveCount(1);
-  await page.getByRole('button', { name: /^Claim$/ }).first().click();
-  await expect(page.getByRole('button', { name: /^Mine$/ })).toHaveCount(2);
+  await page.getByRole('button', { name: /^Claim:/ }).first().click();
+  await expect(page.getByRole('button', { name: /^Mine:/ })).toHaveCount(1);
+  await page.getByRole('button', { name: /^Claim:/ }).first().click();
+  await expect(page.getByRole('button', { name: /^Mine:/ })).toHaveCount(2);
   await expect.poll(() => readCachedTrip(page).then((cached) => Object.keys(cached?.claims ?? {}).length)).toBe(2);
   const cached = await readCachedTrip(page);
   expect(Date.parse(cached!.updatedAt!)).toBeGreaterThan(Date.parse(trip.updatedAt));

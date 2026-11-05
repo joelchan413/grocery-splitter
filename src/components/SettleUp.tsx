@@ -1,13 +1,15 @@
 'use client';
 
 import React from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, ChevronUp, CircleCheck, Send } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ChevronDown, ChevronUp, CircleCheck, CircleDollarSign, Send } from 'lucide-react';
 import type { Household, Trip } from '@/types';
 import { combineUnpaidBalances, selectTripsWithMissingPayer, selectUnpaidTrips, createTripStatusLookup } from '@/lib/combined-balances';
 import type { PaidShares, SharePayment } from '@/lib/payments';
 import { sortTripHistory } from '@/lib/trip-history';
 import { Avatar } from './Avatar';
 import { formatRunDate } from './ScannerHome';
+import { useConfirm } from './ConfirmDialog';
+import { BackToTrip } from './TripLayout';
 
 interface SettleUpProps {
   history: Trip[];
@@ -18,7 +20,8 @@ interface SettleUpProps {
   refreshing?: boolean;
   onRecordPayments: (payments: SharePayment[]) => Promise<boolean>;
   onSelectTrip: (trip: Trip) => void;
-  onBack: () => void;
+  /** The run still in progress, if any. */
+  openTrip?: { name: string; onOpen: () => void };
 }
 
 const money = (value: number) => `$${value.toFixed(2)}`;
@@ -33,8 +36,9 @@ export function SettleUp({
   refreshing = false,
   onRecordPayments,
   onSelectTrip,
-  onBack,
+  openTrip,
 }: SettleUpProps) {
+  const confirm = useConfirm();
   const [expanded, setExpanded] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState<string | null>(null);
 
@@ -68,9 +72,14 @@ export function SettleUp({
     }
   };
 
-  const handleMarkAll = () => {
+  const handleMarkAll = async () => {
     const count = unpaidTrips.length;
-    if (!confirm(`Mark everyone on ${count} ${count === 1 ? 'trip' : 'trips'} as paid? Do this once every payment above has been sent.`)) return;
+    const ok = await confirm({
+      title: `Mark ${count === 1 ? 'this trip' : `all ${count} trips`} as paid?`,
+      body: 'Do this once every payment above has been sent. Each roommate is recorded as having paid their share.',
+      confirmLabel: 'Mark as paid',
+    });
+    if (!ok) return;
     markPaid(
       'all',
       unpaidTrips.flatMap((trip) =>
@@ -84,17 +93,11 @@ export function SettleUp({
   };
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 pb-20">
+    <div className="screen">
       <div className="mb-6">
-        <button
-          type="button"
-          onClick={onBack}
-          className="mb-1 flex items-center gap-1 rounded-md text-sm font-medium text-slate-600 hover:text-slate-900 cursor-pointer"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Back
-        </button>
-        <h1 className="text-2xl font-semibold text-slate-900 sm:text-[28px]">Settle up</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <BackToTrip trip={openTrip} />
+        <h1 className="screen-title">Settle up</h1>
+        <p className="screen-lede">
           {unpaidTrips.length === 0
             ? payerLeft.length > 0
               ? 'Nothing to combine.'
@@ -106,14 +109,14 @@ export function SettleUp({
       {refreshing && <p role="status" className="mb-4 text-sm text-slate-500">Refreshing trips…</p>}
 
       {payerLeft.length > 0 && (
-        <p className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <p className="mb-4 rounded-[10px] bg-amber-50 px-4 py-3 text-[15px] text-amber-900">
           {payerLeft.length} {payerLeft.length === 1 ? 'trip is' : 'trips are'} left out because whoever paid is no longer in the
           household: {payerLeft.map((trip) => trip.storeName || 'Grocery store').join(', ')}.
         </p>
       )}
 
       {unpaidTrips.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
+        <div className="card border-dashed p-8 text-center">
           <CheckCircle2 className="mx-auto mb-2 h-6 w-6 text-positive" aria-hidden="true" />
           <h2 className="text-base font-medium text-slate-900">Nothing to pay</h2>
           <p className="mt-1 text-sm text-slate-500">Trips show up here until they are marked as paid out.</p>
@@ -121,7 +124,7 @@ export function SettleUp({
       ) : (
         <>
           {openCount > 0 && (
-            <p className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <p className="mb-4 rounded-[10px] bg-amber-50 px-4 py-3 text-[15px] text-amber-900">
               {openCount} {openCount === 1 ? 'trip is' : 'trips are'} still open for claims, so these amounts can still change.
             </p>
           )}
@@ -136,9 +139,9 @@ export function SettleUp({
                 const link = payment.venmoDeepLink || payment.venmoWebLink;
                 const isEven = payment.amount === 0;
                 return (
-                  <li key={key} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                    <div className="flex flex-wrap items-center justify-between gap-3 p-4">
-                      <div className="flex min-w-0 items-center gap-2">
+                  <li key={key} className="card overflow-hidden">
+                    <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:px-5">
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
                         <Avatar participant={payment.from} />
                         <ArrowRight className="h-4 w-4 flex-none text-slate-500" aria-hidden="true" />
                         <Avatar participant={payment.to} />
@@ -151,19 +154,19 @@ export function SettleUp({
                             {isEven ? ' · nothing to send' : !link && ` · ${payment.to.name} has no Venmo handle`}
                           </p>
                         </div>
+                        {!isEven && <p className="ml-auto pl-2 text-xl font-semibold text-slate-900 num">{money(payment.amount)}</p>}
                       </div>
 
-                      <div className="flex flex-none items-center gap-3">
-                        {!isEven && <p className="text-xl font-semibold text-slate-900 num">{money(payment.amount)}</p>}
+                      <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
                         {link && (
                           <a
                             href={link}
                             target="_blank"
                             rel="noopener noreferrer"
                             aria-label={`Venmo: ${payment.from.name} pays ${payment.to.name} ${money(payment.amount)}`}
-                            className="flex items-center gap-1.5 rounded-full bg-[#0074DE] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#005FB8] active:scale-95 transition-colors"
+                            className="btn btn-venmo flex-1 sm:flex-none"
                           >
-                            <Send className="h-3.5 w-3.5" aria-hidden="true" />
+                            <Send aria-hidden="true" />
                             <span>Venmo</span>
                           </a>
                         )}
@@ -176,9 +179,9 @@ export function SettleUp({
                               ? `Mark ${payment.from.name} and ${payment.to.name} as settled`
                               : `Mark ${payment.from.name}'s ${money(payment.amount)} to ${payment.to.name} as paid`
                           }
-                          className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 transition-colors"
+                          className="btn btn-secondary flex-1 sm:flex-none"
                         >
-                          <CircleCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                          {isEven ? <CircleCheck aria-hidden="true" /> : <CircleDollarSign aria-hidden="true" />}
                           <span>{saving === key ? 'Saving…' : isEven ? 'Settled' : 'Paid'}</span>
                         </button>
                         <button
@@ -187,15 +190,15 @@ export function SettleUp({
                           aria-expanded={isExpanded}
                           aria-controls={drawerId}
                           aria-label={`${isExpanded ? 'Hide' : 'Show'} trips in ${payment.from.name}'s payment to ${payment.to.name}`}
-                          className="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                          className="btn btn-quiet btn-icon"
                         >
-                          {isExpanded ? <ChevronUp className="h-4 w-4" aria-hidden="true" /> : <ChevronDown className="h-4 w-4" aria-hidden="true" />}
+                          {isExpanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
                         </button>
                       </div>
                     </div>
 
-                    {isExpanded && (
-                      <ul id={drawerId} className="space-y-1.5 border-t border-slate-200 bg-slate-50 p-4 text-sm">
+                    {/* Always rendered so aria-controls points at a real element; hidden while closed. */}
+                    <ul id={drawerId} hidden={!isExpanded} className="space-y-1.5 border-t border-[var(--rule)] bg-[var(--ground)] p-4 text-[15px] sm:px-5">
                         {payment.trips.map((share) => (
                           <li key={share.tripId} className="flex items-center justify-between gap-3 text-slate-800">
                             <span>
@@ -211,14 +214,13 @@ export function SettleUp({
                           </li>
                         ))}
                       </ul>
-                    )}
                   </li>
                 );
               })}
             </ul>
           )}
 
-          <section aria-labelledby="settle-trips-heading" className="rounded-2xl border border-slate-200 bg-white p-5">
+          <section aria-labelledby="settle-trips-heading" className="card p-5">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 id="settle-trips-heading" className="text-base font-medium text-slate-900">Trips in these payments</h2>
@@ -228,9 +230,9 @@ export function SettleUp({
                 type="button"
                 onClick={handleMarkAll}
                 disabled={saving !== null}
-                className="flex items-center gap-1.5 rounded-full bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-500 transition-colors cursor-pointer"
+                className="btn btn-primary"
               >
-                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                <CheckCircle2 aria-hidden="true" />
                 <span>{saving === 'all' ? 'Saving…' : `Mark ${unpaidTrips.length === 1 ? 'trip' : `all ${unpaidTrips.length}`} as paid`}</span>
               </button>
             </div>
@@ -243,7 +245,7 @@ export function SettleUp({
                     <button
                       type="button"
                       onClick={() => onSelectTrip(trip)}
-                      className="flex w-full items-center justify-between gap-3 py-3 text-left text-sm cursor-pointer hover:text-slate-900"
+                      className="flex w-full items-center justify-between gap-3 py-3 text-left text-[15px] cursor-pointer hover:text-slate-900"
                     >
                       <span className="min-w-0">
                         <span className="font-medium text-slate-900">{trip.storeName || 'Grocery store'}</span>

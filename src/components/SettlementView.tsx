@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Send, Copy, Check, Edit3, ChevronDown, ChevronUp, Archive, CircleCheck, CircleDollarSign } from 'lucide-react';
+import { Send, Copy, Check, ChevronDown, ChevronUp, Archive, CircleCheck, CircleDollarSign } from 'lucide-react';
 import { Household, Trip } from '@/types';
 import { calculateTripSettlement, round2 } from '@/lib/calculations';
 import type { PaidShares, ShareRef, SharePayment } from '@/lib/payments';
@@ -9,12 +9,17 @@ import { tripPaymentStatus, type TripDebt } from '@/lib/combined-balances';
 import confetti from 'canvas-confetti';
 import { Avatar } from './Avatar';
 import { formatRunDate } from './ScannerHome';
+import { ActionBar, TripSteps } from './TripLayout';
+import { useConfirm } from './ConfirmDialog';
 
 interface SettlementViewProps {
   trip: Trip;
   household: Household;
   onEditClaims: () => void;
+  onEditItems?: () => void;
   onArchiveTrip: () => void;
+  /** Saved receipt photos, shown under the title. */
+  photos?: React.ReactNode;
   paidShares?: PaidShares;
   onRecordPayments?: (payments: SharePayment[]) => void;
   onClearPayments?: (shares: ShareRef[]) => void;
@@ -26,12 +31,15 @@ export function SettlementView({
   trip,
   household,
   onEditClaims,
+  onEditItems,
   onArchiveTrip,
+  photos,
   paidShares = {},
   onRecordPayments,
   onClearPayments,
 }: SettlementViewProps) {
   const [copiedSummary, setCopiedSummary] = useState(false);
+  const confirm = useConfirm();
   const [expandedParticipantId, setExpandedParticipantId] = useState<string | null>(null);
 
   const summary = useMemo(() => calculateTripSettlement(trip, household), [trip, household]);
@@ -91,19 +99,19 @@ export function SettlementView({
   };
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 pb-20">
+    <div className="screen has-bar">
+      <TripSteps current="settlement" onOpen={{ review: onEditItems, claiming: onEditClaims }} />
       {/* Title row: the run, its date and its total */}
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-slate-900 sm:text-[28px]">
-          {summary.storeName || 'Grocery run'}
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="screen-title">{summary.storeName || 'Grocery run'}</h1>
+        <p className="screen-lede">
           Balances for the {formatRunDate(summary.date)} run · total <span className="font-medium text-slate-900 num">{money(summary.totalBill)}</span>
         </p>
       </div>
+      {photos}
 
       {/* The payer and what they get back: the screen's answer */}
-      <section aria-label="Payer" className="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
+      <section aria-label="Payer" className="card mb-6 flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <Avatar participant={payer} size="lg" />
           <div>
@@ -115,11 +123,31 @@ export function SettlementView({
           <p className="text-sm text-slate-500">{payer.name} gets back</p>
           <p className="text-[32px] font-semibold leading-tight text-positive num">+{money(totalReimbursement)}</p>
           {tracksPayments && (
-            <p className="text-sm text-slate-500">
-              {isPaidOut
-                ? 'Everyone has paid'
-                : `${money(receivedCents / 100)} received · ${payments.paidCount} of ${payments.debts.length} paid`}
-            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2 sm:justify-end">
+              <p className="text-sm text-slate-500">
+                {isPaidOut
+                  ? 'Everyone has paid'
+                  : `${money(receivedCents / 100)} received · ${payments.paidCount} of ${payments.debts.length} paid`}
+              </p>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!isPaidOut) return markPaid(payments.unpaid);
+                  const ok = await confirm({
+                    title: 'Mark everyone as unpaid?',
+                    body: `The payments recorded for ${summary.storeName || 'this trip'} are cleared, and every roommate owes their share again.`,
+                    confirmLabel: 'Mark unpaid',
+                    tone: 'danger',
+                  });
+                  if (ok) markUnpaid(payments.debts);
+                }}
+                aria-pressed={isPaidOut}
+                className={`btn btn-sm ${isPaidOut ? 'btn-paid' : 'btn-secondary'}`}
+              >
+                {isPaidOut ? <CircleCheck aria-hidden="true" /> : <CircleDollarSign aria-hidden="true" />}
+                <span>{isPaidOut ? 'Paid out' : 'Mark everyone paid'}</span>
+              </button>
+            </div>
           )}
         </div>
       </section>
@@ -130,63 +158,6 @@ export function SettlementView({
           aren&apos;t tracked here.
         </p>
       )}
-
-      {/* Actions */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={onEditClaims}
-          className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 hover:bg-slate-50 cursor-pointer"
-        >
-          <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>Edit claims</span>
-        </button>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {tracksPayments && (
-            <button
-              type="button"
-              onClick={() => {
-                if (!isPaidOut) return markPaid(payments.unpaid);
-                if (confirm('Mark everyone on this trip as unpaid?')) markUnpaid(payments.debts);
-              }}
-              aria-pressed={isPaidOut}
-              className={`flex items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors cursor-pointer ${isPaidOut ? 'border-transparent bg-positive-soft text-positive' : 'border-slate-300 bg-white text-slate-900 hover:bg-slate-50'}`}
-            >
-              {isPaidOut ? <CircleCheck className="h-3.5 w-3.5" aria-hidden="true" /> : <CircleDollarSign className="h-3.5 w-3.5" aria-hidden="true" />}
-              <span>{isPaidOut ? 'Paid out' : 'Mark everyone paid'}</span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={handleCopySummary}
-            aria-live="polite"
-            className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 hover:bg-slate-50 transition-colors cursor-pointer"
-          >
-            {copiedSummary ? (
-              <>
-                <Check className="h-3.5 w-3.5 text-positive" aria-hidden="true" />
-                <span>Summary copied</span>
-              </>
-            ) : (
-              <>
-                <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>Copy summary for the group chat</span>
-              </>
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={onArchiveTrip}
-            className="flex items-center gap-1.5 rounded-full bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-500 transition-colors cursor-pointer"
-          >
-            <Archive className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Finish and archive</span>
-          </button>
-        </div>
-      </div>
 
       {/* One row per roommate */}
       <h2 className="sr-only">Each roommate&apos;s share</h2>
@@ -202,26 +173,40 @@ export function SettlementView({
           // Paid before the share grew: only the difference is still owed.
           const stillOwed = debt && debt.paidCents > 0 && debt.remainingCents > 0 ? debt.remainingCents / 100 : null;
           const venmoLink = (p.venmoDeepLink || p.venmoWebLink).replace(/([?&]amount=)[\d.]+/, `$1${(stillOwed ?? p.netOwed).toFixed(2)}`);
+          const showVenmo = Boolean(owes && !paid && venmoLink && !payments.payerMissing);
           return (
-            <li key={p.participantId} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              <div className="flex flex-wrap items-center justify-between gap-3 p-4">
-                <div className="flex min-w-[9rem] flex-1 items-center gap-3">
+            <li key={p.participantId} className="card overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3 p-4 sm:px-5">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
                   <Avatar participant={p.participant} />
                   <div className="min-w-0">
                     <p className="truncate text-base font-medium text-slate-900">{p.participant.name}</p>
                     <p className="text-sm text-slate-500">
-                      {p.isPayer ? 'Paid the bill · ' : ''}{p.claimedItems.length} own, {p.householdSharedItems.length} shared
+                      {p.claimedItems.length} own · {p.householdSharedItems.length} shared
                     </p>
                   </div>
-                </div>
-
-                <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-                  <div className="text-right">
-                    <p className="text-xs text-slate-500">
+                  <div className="ml-auto flex-none text-right">
+                    <p className="text-[13px] text-slate-500">
                       {p.isPayer ? 'Own share' : paid ? `Paid ${payer.name}` : stillOwed !== null ? `Owes ${money(stillOwed)} more` : `Owes ${payer.name}`}
                     </p>
                     <p className={`text-lg font-semibold num ${paid ? 'text-positive' : 'text-slate-900'}`}>{money(shown)}</p>
                   </div>
+                </div>
+
+                {/* Venmo comes first and leaves once paid, so Paid stays put under the thumb. */}
+                <div className={`flex items-center justify-end gap-2 ${showVenmo || debt ? 'w-full sm:w-auto' : ''}`}>
+                  {showVenmo && (
+                    <a
+                      href={venmoLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Venmo: ${p.participant.name} pays ${payer.name} ${money(stillOwed ?? p.netOwed)}`}
+                      className="btn btn-venmo flex-1 sm:flex-none"
+                    >
+                      <Send aria-hidden="true" />
+                      <span>Venmo</span>
+                    </a>
+                  )}
 
                   {debt && (
                     <button
@@ -230,24 +215,11 @@ export function SettlementView({
                       aria-pressed={paid}
                       aria-label={`${p.participant.name} has paid ${payer.name}`}
                       title={paid ? 'Paid. Click to mark unpaid' : 'Mark as paid'}
-                      className={`flex items-center gap-1 rounded-full border px-3 py-2 text-sm font-medium transition-colors ${paid ? 'border-transparent bg-positive-soft text-positive' : 'border-slate-300 bg-white text-slate-900 hover:bg-slate-50'}`}
+                      className={`btn flex-1 sm:flex-none ${paid ? 'btn-paid' : 'btn-secondary'}`}
                     >
-                      {paid ? <CircleCheck className="h-3.5 w-3.5" aria-hidden="true" /> : <CircleDollarSign className="h-3.5 w-3.5" aria-hidden="true" />}
+                      {paid ? <CircleCheck aria-hidden="true" /> : <CircleDollarSign aria-hidden="true" />}
                       <span>Paid</span>
                     </button>
-                  )}
-
-                  {owes && !paid && venmoLink && !payments.payerMissing && (
-                    <a
-                      href={venmoLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`Venmo: ${p.participant.name} pays ${payer.name} ${money(stillOwed ?? p.netOwed)}`}
-                      className="flex items-center gap-1.5 rounded-full bg-[#0074DE] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#005FB8] active:scale-95 transition-colors"
-                    >
-                      <Send className="h-3.5 w-3.5" aria-hidden="true" />
-                      <span>Venmo</span>
-                    </a>
                   )}
 
                   <button
@@ -256,15 +228,15 @@ export function SettlementView({
                     aria-expanded={isExpanded}
                     aria-controls={drawerId}
                     aria-label={`${isExpanded ? 'Hide' : 'Show'} items for ${p.participant.name}`}
-                    className="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                    className="btn btn-quiet btn-icon"
                   >
-                    {isExpanded ? <ChevronUp className="h-4 w-4" aria-hidden="true" /> : <ChevronDown className="h-4 w-4" aria-hidden="true" />}
+                    {isExpanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
                   </button>
                 </div>
               </div>
 
-              {isExpanded && (
-                <div id={drawerId} className="border-t border-slate-200 bg-slate-50 p-4 text-sm">
+              {/* Always rendered so aria-controls points at a real element; hidden while closed. */}
+                <div id={drawerId} hidden={!isExpanded} className="border-t border-[var(--rule)] bg-[var(--ground)] p-4 text-[15px] sm:px-5">
                   <div className="space-y-4">
                     <div>
                       <h3 className="text-sm font-medium text-slate-700">Own items</h3>
@@ -276,7 +248,7 @@ export function SettlementView({
                             <li key={idx} className="flex items-center justify-between gap-3 text-slate-800">
                               <span>
                                 {it.itemName}{it.claimedQuantity > 1 && <span className="text-slate-500"> × {it.claimedQuantity}</span>}
-                                {it.isTaxable && <span className="ml-1.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-xs text-amber-900">Taxed</span>}
+                                {it.isTaxable && <span className="tag-taxed ml-1.5">Taxed</span>}
                               </span>
                               <span className="font-medium text-slate-900 num">{money(it.priceShare)}</span>
                             </li>
@@ -325,11 +297,29 @@ export function SettlementView({
                     </dl>
                   </div>
                 </div>
-              )}
             </li>
           );
         })}
       </ul>
+
+      <p className="sr-only" role="status">{copiedSummary ? 'The summary is on the clipboard, ready to paste.' : ''}</p>
+      <ActionBar label="Finish this trip">
+        <button
+          type="button"
+          onClick={handleCopySummary}
+          aria-label={copiedSummary ? 'Summary copied' : 'Copy summary for the group chat'}
+          className="btn btn-secondary btn-lg min-w-0 flex-1 px-4 sm:flex-none sm:px-[22px]"
+        >
+          {copiedSummary ? <Check className="text-positive" aria-hidden="true" /> : <Copy aria-hidden="true" />}
+          <span>
+            {copiedSummary ? 'Summary copied' : <>Copy summary<span className="hidden sm:inline"> for the group chat</span></>}
+          </span>
+        </button>
+        <button type="button" onClick={onArchiveTrip} className="btn btn-primary btn-lg min-w-0 flex-1 px-4 sm:flex-none sm:px-[22px]">
+          <Archive aria-hidden="true" className="hidden sm:block" />
+          <span>Finish and archive</span>
+        </button>
+      </ActionBar>
     </div>
   );
 }

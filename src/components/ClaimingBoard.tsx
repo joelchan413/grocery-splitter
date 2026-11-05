@@ -1,19 +1,12 @@
 'use client';
 
 import React from 'react';
-import {
-  Users,
-  CheckCircle2,
-  ArrowRight,
-  Edit3,
-  Check,
-  Plus,
-  Minus,
-} from 'lucide-react';
+import { CheckCircle2, ArrowRight, Check, Plus, Minus } from 'lucide-react';
 import { Household, Trip } from '@/types';
 import { calculateTripSettlement } from '@/lib/calculations';
 import confetti from 'canvas-confetti';
 import { Avatar, personStyle } from './Avatar';
+import { ActionBar, TripSteps } from './TripLayout';
 
 interface ClaimingBoardProps {
   trip: Trip;
@@ -23,6 +16,8 @@ interface ClaimingBoardProps {
   onUpdateTrip: (updated: Trip) => void;
   onViewSettlement: () => void;
   onBackToReview: () => void;
+  /** Saved receipt photos, shown under the title. */
+  photos?: React.ReactNode;
 }
 
 export function ClaimingBoard({
@@ -33,6 +28,7 @@ export function ClaimingBoard({
   onUpdateTrip,
   onViewSettlement,
   onBackToReview,
+  photos,
 }: ClaimingBoardProps) {
   const activeParticipant =
     household.participants.find((p) => p.id === activeParticipantId) ||
@@ -59,9 +55,13 @@ export function ClaimingBoard({
   };
 
   // Adjust claimed quantity for active participant on an item
-  const handleSetQuantityClaim = (itemId: string, newQty: number, maxQty: number) => {
+  // One polite announcement for the steppers, in place of a live region on every row.
+  const [announcement, setAnnouncement] = React.useState('');
+
+  const handleSetQuantityClaim = (itemId: string, newQty: number, maxQty: number, itemName = '') => {
     const currentClaims = { ...(trip.claims[itemId] || {}) };
     const clampedQty = Math.max(0, Math.min(maxQty, newQty));
+    setAnnouncement(`${activeParticipant.name}: ${clampedQty} of ${maxQty} ${itemName}`);
 
     if (clampedQty === 0) {
       delete currentClaims[activeParticipantId];
@@ -142,40 +142,29 @@ export function ClaimingBoard({
   const numReady = readySet.size;
   const totalRoommates = household.participants.length;
 
+  const splitWays = household.participants.length;
+
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 pb-24">
-      {/* Title row: the run being claimed */}
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">
-            {trip.storeName}
-          </h1>
-          <p className="text-xs text-slate-500">
-            {trip.items.length} {trip.items.length === 1 ? 'item' : 'items'}
-          </p>
-        </div>
-        <span className="text-xs text-slate-500 text-right">
-          Unclaimed items are split {household.participants.length} ways
-        </span>
+    <div className="screen has-bar">
+      <TripSteps current="claiming" onOpen={{ review: onBackToReview, settlement: onViewSettlement }} />
+      <div className="mb-5">
+        <h1 className="screen-title">{trip.storeName}</h1>
+        <p className="screen-lede">
+          {trip.items.length} {trip.items.length === 1 ? 'item' : 'items'} · anything nobody claims is split {splitWays} ways
+        </p>
       </div>
+      {photos}
 
-      {/* Top Participant Switcher Bar */}
-      <div className="sticky top-16 z-20 -mx-4 mb-6 border-b border-slate-200 bg-white px-4 py-3 sm:mx-0 sm:rounded-2xl sm:border desk:top-4">
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <h2 id="claiming-for" className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-            <Users className="h-4 w-4 text-slate-500" aria-hidden="true" />
-            <span>Who&apos;s claiming?</span>
-          </h2>
-          <button
-            type="button"
-            onClick={onBackToReview}
-            className="flex items-center gap-1 rounded-md text-sm font-medium text-slate-600 hover:text-slate-900"
-          >
-            <Edit3 className="h-3.5 w-3.5" aria-hidden="true" /> Edit receipt items
-          </button>
+      {/* Who is claiming: stays in reach while the list scrolls. */}
+      <section
+        aria-labelledby="claiming-for"
+        className="sticky top-16 z-20 -mx-4 mb-4 border-b border-slate-200 bg-[var(--ground)] px-4 pt-2 pb-3 sm:mx-0 sm:px-0 sm:border-b-0 desk:top-0 desk:pt-4"
+      >
+        <div className="mb-2 flex items-baseline justify-between gap-2">
+          <h2 id="claiming-for" className="text-[15px] font-medium text-slate-900">Who&apos;s claiming?</h2>
+          <span className="text-sm text-slate-500 num">{numReady} of {totalRoommates} done</span>
         </div>
-
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-labelledby="claiming-for">
+        <div className="claim-people" role="group" aria-labelledby="claiming-for">
           {household.participants.map((p) => {
             const isSelected = activeParticipantId === p.id;
             const isReady = readySet.has(p.id);
@@ -186,25 +175,19 @@ export function ClaimingBoard({
                 onClick={() => onSelectParticipant(p.id)}
                 aria-pressed={isSelected}
                 style={personStyle(p)}
-                className={`person-tint relative flex items-center gap-2.5 rounded-xl border p-2.5 text-left transition-colors cursor-pointer ${
-                  isSelected
-                    ? 'border-[var(--tint-ink)] bg-[var(--tint-bg)] text-[var(--tint-ink)] ring-1 ring-[var(--tint-ink)]'
-                    : 'border-slate-300 bg-white text-slate-700 hover:border-[var(--tint-ink)]'
-                }`}
+                className="claim-person person-tint"
               >
-                <Avatar participant={p} className={isSelected ? 'bg-white!' : ''} />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{p.name}</div>
-                  <div className={`truncate text-xs ${isSelected ? '' : 'text-slate-500'}`}>
+                <Avatar participant={p} size="sm" className="sm:hidden" />
+                <Avatar participant={p} className="hidden sm:inline-grid" />
+                <span className="min-w-0 max-w-full">
+                  <span className="block truncate text-sm font-medium">{p.name}</span>
+                  <span className={`hidden truncate text-[13px] sm:block ${isSelected ? '' : 'text-slate-500'}`}>
                     {p.id === liveSummary.payer.id ? 'Paid the bill' : p.venmoHandle || 'Roommate'}
-                  </div>
-                </div>
+                  </span>
+                </span>
                 {isReady && (
-                  <span
-                    className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-slate-900 text-white"
-                    title="Done claiming"
-                  >
-                    <Check className="h-3 w-3 stroke-[3]" aria-hidden="true" />
+                  <span className="claim-person-done" title="Done claiming">
+                    <Check aria-hidden="true" />
                     <span className="sr-only">Done claiming</span>
                   </span>
                 )}
@@ -212,60 +195,16 @@ export function ClaimingBoard({
             );
           })}
         </div>
-      </div>
+      </section>
 
-      {/* Readiness Check-in Banner */}
-      <div className="mb-6 flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-slate-900">
-              Done claiming
-            </span>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 num">
-              {numReady} of {totalRoommates}
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Claims can still change after balances are worked out.
-          </p>
-        </div>
+      <p className="sr-only" role="status">{announcement}</p>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <button
-            type="button"
-            onClick={handleToggleReady}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold transition-colors cursor-pointer ${
-              isSelfReady
-                ? 'bg-primary-100 text-primary-800 border border-primary-300'
-                : 'bg-primary-600 text-white hover:bg-primary-500'
-            }`}
-          >
-            {isSelfReady ? (
-              <>
-                <CheckCircle2 className="h-4 w-4 text-primary-600" aria-hidden="true" />
-                <span>{activeParticipant.name} is done</span>
-              </>
-            ) : (
-              <>
-                <span>I&apos;m done claiming</span>
-              </>
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={onViewSettlement}
-            className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-900 hover:bg-slate-50 transition-colors cursor-pointer"
-          >
-            <span>View balances</span>
-            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
-        </div>
-      </div>
-
-      {/* Line Items List */}
-      <div className="space-y-3">
-        {trip.items.map((item) => {
+      {/* One row per item. Rows the chosen roommate claimed take their colour. */}
+      <h2 className="sr-only">Items</h2>
+      <ul className="claim-list card overflow-hidden" style={personStyle(activeParticipant)}>
+        {trip.items.map((item, index) => {
+          // Controls name their item; an item whose name was cleared falls back to its place in the list.
+          const itemLabel = item.name.trim() || `item ${index + 1}`;
           // Claims from people no longer in the household don't count, matching the settlement.
           const itemClaims = Object.fromEntries(
             Object.entries(trip.claims[item.id] || {}).filter(([pId]) => household.participants.some((p) => p.id === pId))
@@ -273,143 +212,93 @@ export function ClaimingBoard({
           const selfClaimedQty = itemClaims[activeParticipantId] || 0;
           const totalClaimedQty = Object.values(itemClaims).reduce((a, b) => a + (b || 0), 0);
           const isHouseholdShared = totalClaimedQty === 0;
-          const claimants = household.participants.filter(
-            (p) => (itemClaims[p.id] || 0) > 0
-          );
+          const claimants = household.participants.filter((p) => (itemClaims[p.id] || 0) > 0);
+          const itemGross = item.quantity * item.unitPrice;
+          const mine = selfClaimedQty > 0;
 
           return (
-            <div
-              key={item.id}
-              className={`rounded-2xl border p-4 transition-colors ${
-                selfClaimedQty > 0
-                  ? 'border-primary-500/60 bg-primary-50/20'
-                  : isHouseholdShared
-                  ? 'border-slate-200 bg-white'
-                  : 'border-slate-200 bg-slate-50/50'
-              }`}
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                {/* Item Details */}
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-slate-900">
-                      {item.name}
-                    </span>
-                    {item.isTaxable ? (
-                      <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">
-                        Taxed
-                      </span>
-                    ) : (
-                      <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-500">
-                        Not taxed
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-slate-500 mt-0.5">
-                    {item.quantity > 1 ? (
-                      <span>
-                        {item.quantity} units @ ${item.unitPrice.toFixed(2)} each ={' '}
-                        <strong>${(item.quantity * item.unitPrice).toFixed(2)}</strong>
-                      </span>
-                    ) : (
-                      <span className="font-semibold text-slate-800">
-                        ${item.unitPrice.toFixed(2)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Claiming Actions for Active Participant */}
-                <div className="flex items-center gap-2">
-                  {item.quantity === 1 ? (
-                    <button
-                      type="button"
-                      onClick={() => handleToggleSingleClaim(item.id)}
-                      className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold transition-colors cursor-pointer ${
-                        selfClaimedQty > 0
-                          ? 'bg-primary-600 text-white hover:bg-primary-500'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      }`}
-                    >
-                      {selfClaimedQty > 0 ? (
-                        <>
-                          <Check className="h-3.5 w-3.5 stroke-[3]" />
-                          <span>
-                            {totalClaimedQty > 1 ? `Split (1/${totalClaimedQty})` : 'Mine'}
-                          </span>
-                        </>
-                      ) : (
-                        <span>{totalClaimedQty > 0 ? 'Join split' : 'Claim'}</span>
-                      )}
-                    </button>
+            <li key={item.id} className={`claim-row person-tint${mine ? ' is-mine' : ''}`}>
+              <div className="min-w-0">
+                <p className="text-[15px] font-medium leading-snug text-slate-900">
+                  {item.name}
+                  {item.isTaxable && <> <span className="tag-taxed">Taxed</span></>}
+                </p>
+                <p className="mt-0.5 text-sm text-slate-500 num">
+                  {item.quantity > 1 ? (
+                    <>
+                      {item.quantity} × ${item.unitPrice.toFixed(2)} = <span className="font-medium text-slate-900">${itemGross.toFixed(2)}</span>
+                    </>
                   ) : (
-                    <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleSetQuantityClaim(item.id, selfClaimedQty - 1, item.quantity)
-                        }
-                        disabled={selfClaimedQty === 0}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-30"
-                        title="Decrease"
-                        aria-label={`Claim one fewer ${item.name}`}
-                      >
-                        <Minus className="h-3.5 w-3.5" />
-                      </button>
-                      <span className="w-10 text-center text-xs font-semibold text-slate-900">
-                        {selfClaimedQty} / {item.quantity}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleSetQuantityClaim(item.id, selfClaimedQty + 1, item.quantity)
-                        }
-                        disabled={totalClaimedQty >= item.quantity && selfClaimedQty === 0}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-30"
-                        title="Increase"
-                        aria-label={`Claim one more ${item.name}`}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
+                    <span className="font-medium text-slate-900">${item.unitPrice.toFixed(2)}</span>
                   )}
-
-                  {/* Split toggle */}
-                  <button
-                    type="button"
-                    onClick={() => handleSplitWithAll(item.id, item.quantity)}
-                    className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
-                    title="Split equally across all roommates"
-                  >
-                    Split all
-                  </button>
-                </div>
+                </p>
               </div>
 
-              {/* Claimed Badges Row */}
-              <div className="mt-3 flex flex-wrap items-center gap-1.5 pt-2.5 border-t border-slate-100">
+              {/* Claiming controls for the chosen roommate */}
+              <div className="flex items-center gap-1.5">
+                {item.quantity === 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSingleClaim(item.id)}
+                    aria-pressed={mine}
+                    // Every row has these buttons, so each name starts with its visible label, then says which item.
+                    aria-label={`${mine ? (totalClaimedQty > 1 ? `Split (1/${totalClaimedQty})` : 'Mine') : totalClaimedQty > 0 ? 'Join split' : 'Claim'}: ${itemLabel}`}
+                    className={`btn btn-sm min-w-[5.5rem] ${mine ? 'btn-claimed' : 'btn-secondary'}`}
+                  >
+                    {mine ? (
+                      <>
+                        <Check aria-hidden="true" className="stroke-[3]" />
+                        <span>{totalClaimedQty > 1 ? `Split (1/${totalClaimedQty})` : 'Mine'}</span>
+                      </>
+                    ) : (
+                      <span>{totalClaimedQty > 0 ? 'Join split' : 'Claim'}</span>
+                    )}
+
+                  </button>
+                ) : (
+                  <div className={`claim-stepper${mine ? ' is-mine' : ''}`}>
+                    <button
+                      type="button"
+                      onClick={() => handleSetQuantityClaim(item.id, selfClaimedQty - 1, item.quantity, itemLabel)}
+                      disabled={selfClaimedQty === 0}
+                      title="Claim one fewer"
+                      aria-label={`Claim one fewer ${itemLabel}`}
+                    >
+                      <Minus aria-hidden="true" />
+                    </button>
+                    <span className="claim-stepper-count num">
+                      {selfClaimedQty} / {item.quantity}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleSetQuantityClaim(item.id, selfClaimedQty + 1, item.quantity, itemLabel)}
+                      disabled={selfClaimedQty >= item.quantity || (totalClaimedQty >= item.quantity && selfClaimedQty === 0)}
+                      title="Claim one more"
+                      aria-label={`Claim one more ${itemLabel}`}
+                    >
+                      <Plus aria-hidden="true" />
+                    </button>
+                  </div>
+                )}
+
+              </div>
+
+              {/* Who has it */}
+              <div className="claim-row-status">
                 {isHouseholdShared ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                    Shared by everyone, ${((item.quantity * item.unitPrice) / totalRoommates).toFixed(2)} each
-                  </span>
+                  <span className="mr-auto num">Shared by everyone · ${(itemGross / totalRoommates).toFixed(2)} each</span>
                 ) : (
                   <>
-                    <span className="text-xs font-medium text-slate-500">Claimed by</span>
                     {claimants.map((c) => {
                       const qty = itemClaims[c.id] || 0;
-                      const itemGross = item.quantity * item.unitPrice;
                       const shareCost = totalClaimedQty >= item.quantity
                         ? (qty / totalClaimedQty) * itemGross
                         : qty * item.unitPrice;
-
                       return (
-                        <span
-                          key={c.id}
-                          className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-800"
-                        >
-                          <Avatar participant={c} size="sm" className="-ml-1.5" />
+                        <span key={c.id} className="claim-chip person-tint" style={personStyle(c)}>
+                          <Avatar participant={c} size="sm" />
                           <span>{c.name}</span>
-                          <span className="text-xs font-normal text-slate-600 num">
+                          <span className="font-normal num">
                             ${shareCost.toFixed(2)}{totalClaimedQty > 1 && item.quantity === 1 ? ` · 1/${totalClaimedQty}` : ''}
                           </span>
                         </span>
@@ -417,7 +306,7 @@ export function ClaimingBoard({
                     })}
 
                     {totalClaimedQty < item.quantity && (
-                      <span className="text-xs font-medium text-amber-800">
+                      <span className="text-[13px] font-medium text-amber-800">
                         {item.quantity - totalClaimedQty} still shared
                       </span>
                     )}
@@ -425,46 +314,76 @@ export function ClaimingBoard({
                     <button
                       type="button"
                       onClick={() => handleResetItemClaims(item.id)}
-                      className="ml-auto rounded-md text-xs text-slate-600 hover:text-red-700 cursor-pointer"
+                      // Sits before Split all, so the two row actions line up at the end of every row.
+                      aria-label={`Reset to shared: ${itemLabel}`}
+                      className="btn btn-quiet btn-sm ml-auto text-[13px]!"
                     >
                       Reset to shared
                     </button>
                   </>
                 )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Floating Bottom Bar with Live Balance */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white p-3 desk:left-[var(--sidebar-width)]">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-2">
-          <div className="flex items-center gap-2.5">
-            <Avatar participant={activeParticipant} size="lg" />
-            <div>
-              <div className="text-xs text-slate-600">
-                {activeIsPayer ? `${activeParticipant.name}'s own share` : `${activeParticipant.name} owes so far`}
-              </div>
-              <div className="text-base font-semibold text-slate-900 num">
-                ${activeShare.toFixed(2)}{' '}
-                {activeIsPayer && (
-                  <span className="text-xs text-slate-500 font-normal">paid the bill</span>
+                {/* Unclaimed items are already split by everyone, so Split all only shows once someone has claimed. */}
+                {!isHouseholdShared && claimants.length < household.participants.length && (
+                  <button
+                    type="button"
+                    onClick={() => handleSplitWithAll(item.id, item.quantity)}
+                    className="btn btn-quiet btn-sm -mr-2 text-[13px]!"
+                    title="Split equally across all roommates"
+                    aria-label={`Split all: ${itemLabel}`}
+                  >
+                    Split all
+                  </button>
                 )}
               </div>
-            </div>
-          </div>
+            </li>
+          );
+        })}
+      </ul>
 
-          <button
-            type="button"
-            onClick={onViewSettlement}
-            className="flex items-center gap-2 rounded-full bg-primary-600 px-5 py-3 text-sm font-semibold text-white hover:bg-primary-500 active:scale-95 transition-[background-color,transform] cursor-pointer"
-          >
-            <span>View breakdown</span>
-            <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </button>
+      {/* Saying you're done comes after the list, where claiming ends. */}
+      <section aria-labelledby="done-heading" className="card mt-4 flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 id="done-heading" className="text-base font-medium text-slate-900">Done claiming</h2>
+          <p className="mt-0.5 text-sm text-slate-500">
+            {numReady} of {totalRoommates} roommates are done. Claims can still change after balances are worked out.
+          </p>
         </div>
-      </div>
+        <button
+          type="button"
+          onClick={handleToggleReady}
+          aria-pressed={isSelfReady}
+          className={`btn btn-lg ${isSelfReady ? 'btn-paid' : 'btn-secondary'}`}
+        >
+          {isSelfReady ? (
+            <>
+              <CheckCircle2 aria-hidden="true" />
+              <span>{activeParticipant.name} is done</span>
+            </>
+          ) : (
+            <span>I&apos;m done claiming</span>
+          )}
+        </button>
+      </section>
+
+      <ActionBar label="Your share">
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar participant={activeParticipant} size="lg" className="hidden sm:inline-grid" />
+          <div className="min-w-0">
+            <p className="action-bar-label truncate">
+              {activeIsPayer ? `${activeParticipant.name}'s own share` : `${activeParticipant.name} owes so far`}
+            </p>
+            <p className="action-bar-value num">
+              ${activeShare.toFixed(2)}{' '}
+              {activeIsPayer && <span className="hidden text-[13px] font-normal text-slate-500 sm:inline">paid the bill</span>}
+            </p>
+          </div>
+        </div>
+
+        <button type="button" onClick={onViewSettlement} className="btn btn-primary btn-lg">
+          <span>View balances</span>
+          <ArrowRight aria-hidden="true" />
+        </button>
+      </ActionBar>
     </div>
   );
 }

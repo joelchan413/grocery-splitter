@@ -104,9 +104,11 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
     await expect(page.getByRole('heading', { name: 'Items (6)' })).toBeVisible();
 
     // Toggle tax on an exempt item
-    const exemptBadges = page.getByRole('button', { name: 'Not taxed', exact: true });
-    await exemptBadges.first().click();
-    await expect(page.getByRole('button', { name: 'Taxed', exact: true }).first()).toHaveAttribute('aria-pressed', 'true');
+    // The tax toggle keeps one name per item, "Taxed: <item>", and reports its state through aria-pressed.
+    const exemptBadge = page.getByRole('button', { name: /^Taxed:/, pressed: false }).first();
+    const exemptName = (await exemptBadge.getAttribute('aria-label'))!;
+    await exemptBadge.click();
+    await expect(page.getByRole('button', { name: exemptName, exact: true })).toHaveAttribute('aria-pressed', 'true');
 
     // Proceed to Claiming Board
     await page.getByRole('button', { name: /Open for Roommate Claims/i }).click();
@@ -123,8 +125,8 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
     await page.getByRole('button', { name: /Open for Roommate Claims/i }).click();
 
     // Joel claims Whole Milk
-    await page.getByRole('button', { name: /^Claim$/i }).first().click();
-    await expect(page.getByRole('button', { name: /^Mine$/i }).first()).toBeVisible();
+    await page.getByRole('button', { name: /^Claim:/i }).first().click();
+    await expect(page.getByRole('button', { name: /^Mine:/i }).first()).toBeVisible();
 
     // Switch to Alex
     await page.getByRole('button', { name: /Alex/i }).first().click();
@@ -134,8 +136,8 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
     await expect(page.getByText(/Split \(1\/2\)/i)).toBeVisible();
 
     // Alex claims Bananas alone
-    await page.getByRole('button', { name: /^Claim$/i }).first().click();
-    await expect(page.getByRole('button', { name: /^Mine$/i }).first()).toBeVisible();
+    await page.getByRole('button', { name: /^Claim:/i }).first().click();
+    await expect(page.getByRole('button', { name: /^Mine:/i }).first()).toBeVisible();
 
     // Alex marks done
     await page.getByRole('button', { name: /I'm Done Claiming/i }).click();

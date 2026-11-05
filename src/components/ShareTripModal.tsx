@@ -56,7 +56,7 @@ export function ShareTripModal({ isOpen, trip, household, onClose }: ShareTripMo
             type="button"
             onClick={onClose}
             aria-label="Close sharing"
-            className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
+            className="btn btn-quiet btn-icon -mr-2 -mt-1"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -88,7 +88,7 @@ export function ShareTripModal({ isOpen, trip, household, onClose }: ShareTripMo
                 type="button"
                 onClick={handleCopyLink}
                 aria-live="polite"
-                className="flex shrink-0 items-center gap-1 rounded-full bg-primary-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-primary-500 active:scale-95 transition-colors cursor-pointer"
+                className="btn btn-primary"
               >
                 {copied ? (
                   <>
@@ -139,7 +139,7 @@ export function ShareTripModal({ isOpen, trip, household, onClose }: ShareTripMo
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-slate-300 bg-white px-5 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 transition-colors cursor-pointer"
+            className="btn btn-secondary"
           >
             Close
           </button>

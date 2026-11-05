@@ -81,11 +81,11 @@ export function ExportCsv({ history, household, participantId }: ExportCsvProps)
   };
 
   const inputClass =
-    'w-full min-w-0 sm:w-auto rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-900 focus:bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none';
+    'w-full min-w-0 sm:w-auto rounded-xl border border-slate-300 bg-white px-3 py-2 text-base font-medium text-slate-900 focus:border-slate-900 sm:text-sm focus:outline-none';
   const labelClass = 'min-w-0 text-sm font-medium text-slate-600';
 
   return (
-    <section aria-labelledby="export-title" className="mb-6 rounded-2xl border border-slate-200 bg-white p-4">
+    <section aria-labelledby="export-title" className="card p-4 sm:p-5">
       <h2 id="export-title" className="mb-3 text-base font-medium text-slate-900">Export to CSV</h2>
       <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end">
         <label className={`col-span-2 ${labelClass}`}>
@@ -141,9 +141,9 @@ export function ExportCsv({ history, household, participantId }: ExportCsvProps)
           type="button"
           onClick={handleExport}
           disabled={exporting}
-          className="col-span-2 flex items-center justify-center gap-1.5 rounded-full bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-500 cursor-pointer"
+          className="btn btn-secondary col-span-2 w-full sm:w-auto"
         >
-          <Download className="h-4 w-4" aria-hidden="true" />
+          <Download aria-hidden="true" />
           <span>{exporting ? 'Preparing export…' : 'Export CSV'}</span>
         </button>
       </div>

@@ -36,6 +36,7 @@ export function HouseholdModal({
   onSave,
 }: HouseholdModalProps) {
   const [name, setName] = useState(household.name);
+  const [nameError, setNameError] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>(household.participants);
 
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -66,16 +67,15 @@ export function HouseholdModal({
   };
 
   const handleRemoveParticipant = (id: string) => {
-    if (participants.length <= 2) {
-      alert('A household needs at least 2 roommates.');
-      return;
-    }
+    // The remove button only shows above two roommates, the smallest household.
+    if (participants.length <= 2) return;
     setParticipants((prev) => prev.filter((p) => p.id !== id));
   };
 
   const handleSave = () => {
     if (!name.trim()) {
-      alert('Enter a household name.');
+      setNameError(true);
+      document.getElementById('household-name')?.focus();
       return;
     }
     onSave({
@@ -113,7 +113,7 @@ export function HouseholdModal({
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
+              className="btn btn-quiet btn-icon -mr-2 -mt-1"
             >
               <X className="h-5 w-5" aria-hidden="true" />
             </button>
@@ -129,10 +129,20 @@ export function HouseholdModal({
               id="household-name"
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (e.target.value.trim()) setNameError(false);
+              }}
               placeholder="e.g. Apartment 4B"
-              className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-base text-slate-900 placeholder:text-slate-500 focus:border-primary-500 focus:outline-none"
+              aria-invalid={nameError}
+              aria-describedby={nameError ? 'household-name-error' : undefined}
+              className={`w-full rounded-xl border bg-white px-3.5 py-2 text-base text-slate-900 placeholder:text-slate-500 focus:outline-none ${nameError ? 'border-red-600 focus:border-red-700' : 'border-slate-300 focus:border-slate-900'}`}
             />
+            {nameError && (
+              <p id="household-name-error" className="mt-1.5 text-sm text-red-700">
+                Enter a household name.
+              </p>
+            )}
           </div>
 
           <div>
@@ -143,7 +153,7 @@ export function HouseholdModal({
               <button
                 type="button"
                 onClick={handleAddParticipant}
-                className="flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-50 cursor-pointer"
+                className="btn btn-secondary btn-sm"
               >
                 <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                 <span>Add roommate</span>
@@ -162,7 +172,7 @@ export function HouseholdModal({
                       value={p.name}
                       onChange={(e) => handleUpdateParticipant(p.id, { name: e.target.value })}
                       placeholder="Name"
-                      className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-base font-medium text-slate-900 placeholder:text-slate-500 focus:border-primary-500 focus:outline-none"
+                      className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-base font-medium text-slate-900 placeholder:text-slate-500 focus:border-slate-900 focus:outline-none"
                     />
 
                     <input
@@ -179,7 +189,7 @@ export function HouseholdModal({
                         type="button"
                         onClick={() => handleRemoveParticipant(p.id)}
                         aria-label={`Remove ${p.name || `roommate ${index + 1}`}`}
-                        className="rounded-full p-2 text-slate-500 hover:bg-white hover:text-red-700 cursor-pointer"
+                        className="btn btn-quiet btn-icon hover:text-red-700!"
                         title="Remove roommate"
                       >
                         <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -194,7 +204,7 @@ export function HouseholdModal({
                       value={p.venmoHandle}
                       onChange={(e) => handleUpdateParticipant(p.id, { venmoHandle: e.target.value })}
                       placeholder="@username (optional)"
-                      className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-500 focus:border-primary-500 focus:outline-none"
+                      className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-base text-slate-900 placeholder:text-slate-500 sm:text-sm focus:border-slate-900 focus:outline-none"
                     />
                   </label>
                 </li>
@@ -208,7 +218,7 @@ export function HouseholdModal({
             <button
               type="button"
               onClick={handleSave}
-              className="rounded-full px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 cursor-pointer"
+              className="btn btn-quiet"
             >
               Use defaults
             </button>
@@ -216,7 +226,7 @@ export function HouseholdModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 cursor-pointer"
+              className="btn btn-quiet"
             >
               Cancel
             </button>
@@ -225,7 +235,7 @@ export function HouseholdModal({
           <button
             type="button"
             onClick={handleSave}
-            className="flex items-center gap-1.5 rounded-full bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-500 transition-colors cursor-pointer"
+            className="btn btn-primary"
           >
             <Check className="h-4 w-4" aria-hidden="true" />
             <span>{isFirstTime ? 'Save and start splitting' : 'Save household'}</span>

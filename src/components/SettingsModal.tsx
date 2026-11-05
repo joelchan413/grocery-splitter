@@ -49,7 +49,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             <h2 id="settings-title" className="text-xl font-semibold text-slate-900">Settings</h2>
             <p className="text-sm text-slate-500">Receipt scanning</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close settings" className="cursor-pointer rounded-full p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
+          <button type="button" onClick={onClose} aria-label="Close settings" className="btn btn-quiet btn-icon -mr-2 -mt-1">
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
@@ -62,7 +62,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               {error || status?.message || 'Checking the scanner connection…'}
             </div>
             {status && !error && <p className="mt-2 text-sm text-slate-500">Model: {status.model}</p>}
-            <button type="button" onClick={() => { setStatus(null); setError(null); setRefresh((value) => value + 1); }} className="mt-3 flex cursor-pointer items-center gap-1.5 rounded-md text-sm font-medium text-slate-900 hover:text-accent">
+            <button type="button" onClick={() => { setStatus(null); setError(null); setRefresh((value) => value + 1); }} className="btn btn-secondary btn-sm mt-3">
               <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Check connection
             </button>
           </div>
@@ -72,7 +72,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           </div>
         </div>
         <div className="mt-6 flex justify-end border-t border-slate-200 pt-4">
-          <button type="button" onClick={onClose} className="cursor-pointer rounded-full bg-primary-600 px-5 py-2 text-sm font-semibold text-white hover:bg-primary-500">Close</button>
+          <button type="button" onClick={onClose} className="btn btn-primary">Close</button>
         </div>
       </div>
     </div>

@@ -133,5 +133,6 @@ test('a deferred screen chunk failure offers recovery after reconnecting', async
   await expect(page.getByRole('heading', { name: 'GrocerySplit couldn’t finish loading' })).toBeVisible();
   await page.unroute('**/_next/static/chunks/*.js');
   await page.getByRole('button', { name: 'Reload app', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'New grocery run' })).toBeVisible();
+  // The reload reopens the screen that failed, since History has its own address.
+  await expect(page.getByRole('heading', { name: 'Trip history' })).toBeVisible();
 });

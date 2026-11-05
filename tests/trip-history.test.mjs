@@ -34,6 +34,9 @@ function loadModule(relPath) {
     if (name === '@/lib/combined-balances') return loadModule('../src/lib/combined-balances.ts');
     if (name === './Avatar') return loadModule('../src/components/Avatar.tsx');
     if (name === './ScannerHome') return loadModule('../src/components/ScannerHome.tsx');
+    if (name === './ConfirmDialog') return loadModule('../src/components/ConfirmDialog.tsx');
+    if (name === './TripLayout') return loadModule('../src/components/TripLayout.tsx');
+    if (name === '@/hooks/useModalDialog') return loadModule('../src/hooks/useModalDialog.ts');
     if (name === 'canvas-confetti') return { __esModule: true, default: () => {} };
     if (name === '@/lib/export-csv') return loadModule('../src/lib/export-csv.ts');
     if (name === '@/lib/export-photos') return loadModule('../src/lib/export-photos.ts');
@@ -460,7 +463,7 @@ test('the claiming screen ignores claims from removed roommates and follows the 
     onViewSettlement: () => {},
     onBackToReview: () => {},
   }));
-  assert.match(html, /Shared by everyone, \$3\.00 each/);
+  assert.match(html, /Shared by everyone · \$3\.00 each/);
   assert.doesNotMatch(html, /<button[^>]*disabled=""[^>]*aria-label="Claim one more Eggs"/);
   assert.match(html, /Paid the bill/);
   assert.match(html, /Joel&#x27;s own share/);

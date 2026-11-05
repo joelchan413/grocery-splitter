@@ -25,6 +25,7 @@ Tokens live in `src/app/globals.css`, in Tailwind's `@theme`.
 | Primary action | `#1b1d1f`, near-black with white text |
 | Accent | `#1d5fd6`, used on the mark, focus rings and the claiming pill only |
 | Money in | `#2f7a45` |
+| Taxed | `#7a4a00` on `#fff4d6`, for the taxed tag and the pressed tax toggle |
 | Radii | cards 20px, controls 10px, buttons fully round |
 | Type | Manrope at 400, 500 and 600, tabular figures on every amount |
 
@@ -40,9 +41,11 @@ The default colours for new households and new roommates are blue, emerald, ambe
 
 The shell is an open plane. The sidebar breakpoint is `68.8125rem` (1101px at the default font size) in both `globals.css` and `app.css`, so the shell and the `desk:` variant switch together at any browser font size.
 
-- **From 1101px:** a 240px labelled sidebar on the page ground. It holds the mark, the household, New trip, Share live, History and, at the foot, Settings.
+- **From 1101px:** a 240px labelled sidebar on the page ground. It holds the mark, the household, New trip, Share live, History, Settle up and, at the foot, Settings.
 - **Below 1101px:** the same items fold into a 64px top bar.
-- **Below 431px:** New trip shows as an icon. Its accessible name stays.
+- **Below 431px:** New trip shows as an icon, and the household name replaces the wordmark. Both accessible names stay.
+
+Each screen has its own address, `?view=history`, `?view=claiming` and so on, so Back, Forward and reload behave like any web page. Trip screens also carry `&trip=<id>`, so Back after opening another trip returns to the right one. A `trip` that matches the run already open on this phone is a reload; any other is someone joining from a shared link. A bare address resumes the open trip on launch, so the new-run screen shown beside an open trip is `?view=scanner`. A trip screen opened without its trip falls back to a new run, and Back or Forward closes any open dialog.
 
 ## Screens
 
@@ -69,7 +72,13 @@ Payments are tracked per roommate per run, with the amount each one covered. A r
 
 Settle up combines every unpaid share on runs that are past item checking and not hidden. Each roommate gets one payment, with one Venmo link, to each person they owe. When two roommates owe each other, the smaller debt is subtracted from the larger; if the debts cancel exactly, the pair shows as even with nothing to send. Amounts are summed in whole cents, so a combined payment equals the sum of the per-run amounts. Each payment opens to the runs it covers, and its Paid button records every share it clears, in both directions. "Mark all as paid" records every remaining share. The run list says who still owes on each run.
 
-Trip screens share one 896px content width, so the receipt-photo bar and the screen below it start on the same edge.
+Every screen sits in one content column, `.screen`, up to 960px wide and left-aligned beside the sidebar, so titles never jump between screens.
+
+The three trip screens open with a step indicator, Check items → Claim → Balances, which also moves between steps. A run still being checked can't skip ahead, and leaving Check items for Claim saves the edits. Each trip screen keeps its forward action in a bar fixed to the foot of the screen: Open for roommate claims, View balances, and Finish and archive. The receipt-photo disclosure sits under the title, and only when the trip has photos.
+
+On the claiming screen, the roommate picker stays at the top: one row of round chips on phones, cards with Venmo handles from 640px. Items are one list. A row the chosen roommate has claimed takes a wash of their colour with a bar of their ink at its edge, and their claim button fills with that ink. "I'm done claiming" comes after the list.
+
+Buttons share `.btn` classes in `app.css`: fully round, at least 40px tall, with one filled primary per screen. Venmo comes before Paid on every payment row, so Paid stays in place when Venmo leaves.
 
 ## House rules
 
@@ -83,7 +92,7 @@ These hold on every screen:
 - Sentence case everywhere.
 - One filled primary action per screen.
 
-The Taste lint, `lint.mjs --app`, passes over all UI source with zero failures and zero warnings. Four dialog shadows, the default blue roommate colour and the group-chat emoji list carry `taste-skill-ignore` comments with their reasons.
+The Taste lint, `lint.mjs --app src/app src/components src/hooks`, passes over all UI source with zero failures and zero warnings. Four dialog shadows, the default blue roommate colour and the group-chat emoji list carry `taste-skill-ignore` comments with their reasons.
 
 ## Accessibility
 
@@ -92,6 +101,7 @@ The Taste lint, `lint.mjs --app`, passes over all UI source with zero failures a
 - Toggles expose `aria-pressed`, and the settlement drawers expose `aria-expanded`.
 - Dialogs use `role="dialog"` with labels, through `src/hooks/useModalDialog.ts`. Opening one moves focus inside, Tab stays inside it, and closing it returns focus to the control that opened it. Escape closes every dialog except two that need an answer: first-time household setup, and "Who are you?" on a shared trip link.
 - The receipt-photo viewer is the browser's native modal `<dialog>`, which makes the page behind it inert.
+- Questions use the app's own `alertdialog` from `src/components/ConfirmDialog.tsx`, never the browser's `confirm()` or `alert()`. Cancel comes first, so it takes focus; undoing recorded payments uses a red confirm button. Form mistakes show inline under the field.
 - History rows are buttons.
 - Focus rings use the accent.
 - Motion is limited to feedback. The confetti and all transitions respect reduced motion.

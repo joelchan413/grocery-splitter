@@ -1,6 +1,14 @@
 /* App shell, roommate avatars and the new-run screen. Tokens live in globals.css. */
 
 /* ---------- Base behaviour ---------- */
+/* Keyboard focus never lands under the sticky header, the sticky roommate picker or the fixed action bar. */
+html { scroll-padding-top: 80px; }
+html:has(.claim-people) { scroll-padding-top: 184px; }
+html:has(.action-bar) { scroll-padding-bottom: 112px; }
+@media (min-width: 640px) { html:has(.claim-people) { scroll-padding-top: 200px; } }
+@media (min-width: 68.8125rem) { html { scroll-padding-top: 24px; } html:has(.claim-people) { scroll-padding-top: 150px; } }
+/* Headings take focus after a screen change only so assistive tech starts there; they need no ring. */
+main h1[tabindex="-1"]:focus { outline: none; }
 .app-shell { min-height: 100dvh; background: var(--ground); color: var(--text); font-variant-numeric: tabular-nums; }
 .app-shell button:not(:disabled), .app-shell summary, .app-shell a { cursor: pointer; }
 .app-shell button:disabled { cursor: not-allowed; opacity: .55; }
@@ -11,6 +19,7 @@
 }
 
 /* ---------- Roommates: pale tint of their colour, the dark of that hue as ink (always 4.5:1 or more). ---------- */
+@layer components {
 .avatar, .person-tint {
   --tint-bg: color-mix(in srgb, var(--person, #6b6f73) 16%, white);
   --tint-ink: color-mix(in srgb, var(--person, #6b6f73) 42%, black);
@@ -19,13 +28,14 @@
 .avatar-sm { width: 24px; height: 24px; font-size: 12px; }
 .avatar-md { width: 32px; height: 32px; font-size: 14px; }
 .avatar-lg { width: 40px; height: 40px; font-size: 16px; }
+}
 
 /* ---------- Shell: a top bar below 1101px, a labelled sidebar on the page ground above it. ---------- */
 .app-header { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: var(--header-height); padding: 8px 24px; background: var(--ground); border-bottom: 1px solid var(--border); }
 .app-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .app-brand > div { min-width: 0; }
 .app-mark { flex: none; width: 24px; height: 24px; color: var(--color-accent); stroke-width: 1.75; }
-.app-wordmark { display: block; font-size: 17px; font-weight: 600; letter-spacing: -.01em; line-height: 1.2; }
+.app-wordmark { display: block; overflow: hidden; font-size: 17px; font-weight: 600; letter-spacing: -.01em; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
 .app-household { display: flex; flex-wrap: nowrap; align-items: center; gap: 0 6px; max-width: 100%; margin-top: 2px; padding: 0; border-radius: 6px; font-size: 14px; color: var(--muted); text-align: left; }
 .app-household > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-household:hover { color: var(--text); }
@@ -53,8 +63,12 @@
   .app-nav-new .app-nav-label { display: none; }
   /* Hidden on phones but kept in the button's accessible name. */
   .app-household-count { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .app-nav-item { padding: 0 8px; }
-  .app-nav-new { padding: 0 12px; }
+  /* The mark already says GrocerySplit; the household is what changes between phones. */
+  .app-wordmark { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .app-household { margin-top: 0; min-height: 40px; font-size: 16px; font-weight: 600; color: var(--text); }
+  .app-nav { gap: 0; }
+  .app-nav-item { min-width: 38px; padding: 0 6px; }
+  .app-nav-new { margin-left: 2px; padding: 0 9px; }
 }
 
 /* 68.8125rem is 1101px at the default font size, the same width as the desk: variant in globals.css. */
@@ -159,4 +173,111 @@
   .scan-person { min-height: 56px; padding: 10px; }
   .scan-person[aria-pressed="true"] { padding: 9.5px; }
   .scan-dropzone { min-height: 176px; }
+}
+
+/* Shared pieces sit in Tailwind's components layer, so utility classes such as hidden or flex-1 can override them. */
+@layer components {
+/* ---------- Screens: one content column, left-aligned beside the sidebar so titles never jump between screens. ---------- */
+.screen { width: 100%; max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
+.screen.has-bar { padding-bottom: 128px; }
+@media (min-width: 701px) { .screen { padding: 32px 32px 64px; } }
+@media (min-width: 68.8125rem) { .screen { margin: 0; } }
+.screen-title { margin: 0; font-size: 24px; font-weight: 600; line-height: 1.2; letter-spacing: -.01em; color: var(--text); }
+@media (min-width: 701px) { .screen-title { font-size: 28px; } }
+.screen-lede { margin: 6px 0 0; font-size: 15px; line-height: 1.5; color: var(--muted); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; }
+
+/* ---------- Buttons: fully round, 40px or taller, one primary per screen. ---------- */
+.btn { display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 16px; border: 1px solid transparent; border-radius: 999px; font-size: 14px; font-weight: 600; line-height: 1.2; white-space: nowrap; transition: background .15s, border-color .15s, color .15s, transform .1s; }
+.btn:active:not(:disabled) { transform: scale(.98); }
+.btn svg { width: 16px; height: 16px; flex: none; }
+.btn-lg { min-height: 48px; padding: 0 22px; font-size: 15px; }
+.btn-sm { min-height: 36px; padding: 0 12px; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: var(--color-primary-500); }
+.btn-secondary { border-color: var(--control); background: var(--surface); color: var(--text); font-weight: 500; }
+.btn-secondary:hover:not(:disabled) { background: var(--ground); }
+.btn-quiet { padding: 0 10px; color: var(--muted); font-weight: 500; }
+.btn-quiet:hover:not(:disabled) { background: var(--active); color: var(--text); }
+.btn-icon { width: 40px; padding: 0; }
+.btn-icon.btn-sm { width: 36px; }
+.btn-venmo { background: #0074de; color: #fff; }
+.btn-venmo:hover { background: #005fb8; }
+.btn-paid { border-color: transparent; background: var(--color-positive-soft); color: var(--color-positive); }
+.btn-danger { background: #b42318; color: #fff; }
+.btn-danger:hover:not(:disabled) { background: #912018; }
+.back-link { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 6px; border-radius: 6px; font-size: 14px; font-weight: 500; color: var(--muted); }
+.back-link:hover { color: var(--text); }
+.back-link svg { width: 14px; height: 14px; }
+
+/* ---------- Trip steps: where this run is, Check items → Claim → Balances. ---------- */
+.trip-steps { display: flex; align-items: center; gap: 8px; margin: 0 0 20px; padding: 0; list-style: none; font-size: 14px; }
+.trip-steps li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.trip-steps li + li::before { content: ""; flex: none; width: 20px; height: 1px; background: var(--control); }
+.trip-step { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 10px 0 4px; border-radius: 999px; color: var(--muted); font-weight: 500; white-space: nowrap; }
+button.trip-step:hover { background: var(--active); color: var(--text); }
+.trip-step-dot { display: grid; flex: none; place-items: center; width: 24px; height: 24px; border: 1px solid var(--control); border-radius: 50%; background: var(--surface); font-size: 12px; font-weight: 600; }
+.trip-step-dot svg { width: 14px; height: 14px; }
+.trip-step[aria-current="step"] { color: var(--text); font-weight: 600; }
+.trip-step[aria-current="step"] .trip-step-dot { border-color: var(--text); background: var(--text); color: #fff; }
+.trip-step.is-done .trip-step-dot { border-color: transparent; background: var(--active); color: var(--text); }
+@media (max-width: 430px) {
+  .trip-steps { gap: 4px; }
+  .trip-steps li { gap: 4px; }
+  .trip-steps li + li::before { width: 10px; }
+  .trip-step { padding: 0 6px 0 2px; gap: 6px; }
+}
+
+/* ---------- Action bar: each trip step's forward action, always in reach of a thumb. ---------- */
+.action-bar { position: fixed; inset: auto 0 0 0; z-index: 30; border-top: 1px solid var(--border); background: var(--surface); padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); }
+.action-bar-inner { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; max-width: 960px; margin: 0 auto; padding: 0 16px; }
+@media (min-width: 701px) { .action-bar-inner { padding: 0 32px; } }
+@media (min-width: 68.8125rem) { .action-bar { left: var(--sidebar-width); } .action-bar-inner { margin: 0; } }
+.action-bar-label { font-size: 13px; color: var(--muted); }
+.action-bar-value { font-size: 18px; font-weight: 600; line-height: 1.2; color: var(--text); }
+
+/* ---------- Claiming ---------- */
+.claim-people { display: flex; gap: 6px; margin: -4px -16px 0; padding: 4px 16px 2px; overflow-x: auto; scrollbar-width: none; }
+.claim-people::-webkit-scrollbar { display: none; }
+@media (min-width: 640px) { .claim-people { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 0; padding: 0; overflow: visible; } }
+/* Phones: one short row of chips, so the sticky picker leaves room for the list. */
+.claim-person { position: relative; display: flex; flex: 1 0 auto; align-items: center; gap: 6px; min-width: 0; min-height: 40px; padding: 4px 12px 4px 6px; border: 1px solid var(--control); border-radius: 999px; background: var(--surface); color: var(--text); text-align: left; transition: background .15s, border-color .15s; }
+@media (min-width: 640px) { .claim-person { gap: 10px; padding: 10px 12px; border-radius: 10px; } .claim-person[aria-pressed="true"] { padding: 9.5px 11.5px; } }
+.claim-person:hover { border-color: var(--tint-ink); }
+.claim-person[aria-pressed="true"] { padding: 3.5px 11.5px 3.5px 5.5px; border: 1.5px solid var(--tint-ink); background: var(--tint-bg); color: var(--tint-ink); }
+.claim-person[aria-pressed="true"] .avatar { background: var(--surface); }
+.claim-person-done { position: absolute; top: -4px; right: -4px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--text); color: #fff; }
+.claim-person-done svg { width: 11px; height: 11px; stroke-width: 3; }
+.claim-list { margin: 0; padding: 0; list-style: none; }
+.claim-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px 12px; padding: 14px 16px; border-top: 1px solid var(--rule); transition: background .15s; }
+.claim-row:first-child { border-top: 0; }
+@media (min-width: 701px) { .claim-row { padding: 16px 20px; align-items: center; } }
+.claim-row.is-mine { background: color-mix(in srgb, var(--person, #6b6f73) 6%, white); }
+.claim-row.is-mine::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--tint-ink); }
+.claim-row-status { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 28px; font-size: 14px; color: var(--muted); }
+.claim-chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 2px; border-radius: 999px; background: var(--tint-bg); color: var(--tint-ink); font-size: 13px; font-weight: 500; }
+.claim-chip .avatar { background: var(--surface); }
+.btn-claimed { background: var(--tint-ink); color: #fff; }
+.btn-claimed:hover:not(:disabled) { background: color-mix(in srgb, var(--tint-ink) 85%, black); }
+.claim-stepper { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--control); border-radius: 999px; background: var(--surface); }
+.claim-stepper button { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: var(--text); }
+.claim-stepper button:hover:not(:disabled) { background: var(--active); }
+.claim-stepper button:disabled { opacity: .35; }
+.claim-stepper svg { width: 16px; height: 16px; }
+.claim-stepper-count { min-width: 44px; text-align: center; font-size: 14px; font-weight: 600; }
+.claim-stepper.is-mine { border-color: var(--tint-ink); background: var(--tint-bg); color: var(--tint-ink); }
+.claim-stepper.is-mine button { color: var(--tint-ink); }
+/* A filter-chip toggle: grey outline when off, the taxed amber with a check when on. */
+.tax-toggle { display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 4px; min-width: 5.25rem; min-height: 32px; padding: 0 10px; border: 1px solid var(--control); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 500; white-space: nowrap; transition: background .15s, border-color .15s, color .15s; }
+.tax-toggle:hover { color: var(--text); }
+.tax-toggle svg { width: 14px; height: 14px; stroke-width: 2.5; }
+.tax-toggle.is-on { border-color: #f0c25a; background: #fff4d6; color: #7a4a00; }
+/* Touch screens get 40px targets everywhere, including the compact buttons. */
+@media (pointer: coarse) {
+  .btn-sm { min-height: 40px; }
+  .btn-icon.btn-sm { width: 40px; }
+  .claim-stepper button { width: 38px; height: 38px; }
+  .tax-toggle { min-height: 40px; }
+}
+.tag-taxed { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 6px; background: #fff4d6; color: #7a4a00; font-size: 12px; font-weight: 500; vertical-align: 2px; }
 }

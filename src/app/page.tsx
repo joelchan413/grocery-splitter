@@ -15,11 +15,22 @@ import {
   saveActiveParticipantId,
   loadHiddenTripIds,
   saveHiddenTripIds,
+  loadPaidShares,
+  savePaidShares,
   isHouseholdInitialized,
   setHouseholdInitialized,
   DEFAULT_HOUSEHOLD,
 } from '@/lib/storage';
 import { loadTripDetails } from '@/lib/trip-history';
+import {
+  clearSharesPaid,
+  MAX_SHARES_PER_REQUEST,
+  recordSharesPaid,
+  sanitizePaidShares,
+  type PaidShares,
+  type ShareRef,
+  type SharePayment,
+} from '@/lib/payments';
 import { Household, Trip } from '@/types';
 import { useTripSync } from '@/hooks/useTripSync';
 import { Header } from '@/components/Header';
@@ -33,8 +44,9 @@ import { ReceiptPhotos } from '@/components/ReceiptPhotos';
 import { ClaimingBoard } from '@/components/ClaimingBoard';
 import { SettlementView } from '@/components/SettlementView';
 import { TripHistory } from '@/components/TripHistory';
+import { SettleUp } from '@/components/SettleUp';
 
-type AppView = 'scanner' | 'review' | 'claiming' | 'settlement' | 'history';
+type AppView = 'scanner' | 'review' | 'claiming' | 'settlement' | 'history' | 'settle-up';
 
 // Hiding is shared with the household, so the server list is authoritative.
 async function fetchHiddenTripIds(): Promise<string[] | null> {
@@ -43,6 +55,16 @@ async function fetchHiddenTripIds(): Promise<string[] | null> {
     if (!res.ok) return null;
     const ids: unknown = await res.json();
     return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : null;
+  } catch {
+    return null;
+  }
+}
+
+// Payments are shared with the household too, so the server record is authoritative.
+async function fetchPaidShares(): Promise<PaidShares | null> {
+  try {
+    const res = await fetch('/api/payments');
+    return res.ok ? sanitizePaidShares(await res.json()) : null;
   } catch {
     return null;
   }
@@ -60,6 +82,22 @@ export default function Home() {
   const [isIdentifyModalOpen, setIsIdentifyModalOpen] = useState(false);
   const [tripHistory, setTripHistory] = useState<Trip[]>([]);
   const [hiddenTripIds, setHiddenTripIds] = useState<string[]>([]);
+  const [paidShares, setPaidSharesState] = useState<PaidShares>({});
+  // Mirrors the latest payments, so handlers never compute from a stale render.
+  const paidSharesRef = useRef<PaidShares>({});
+  const setPaidShares = useCallback((next: PaidShares | ((prev: PaidShares) => PaidShares)) => {
+    const value = typeof next === 'function' ? next(paidSharesRef.current) : next;
+    paidSharesRef.current = value;
+    setPaidSharesState(value);
+  }, []);
+  // Saves go to the server one at a time, so replies can't arrive out of order. `paymentSave` counts saves started,
+  // so a refresh or the startup read can tell that a save began while it was loading, and drop its result.
+  const paymentSave = useRef(0);
+  const paymentQueue = useRef<Promise<unknown>>(Promise.resolve());
+  // Changes shown on screen but not yet confirmed, in the order they were made.
+  const pendingPayments = useRef<{ apply: (prev: PaidShares) => PaidShares }[]>([]);
+  // The last record the server itself sent, with no unconfirmed changes mixed in. A failed save falls back to it.
+  const confirmedPaidShares = useRef<PaidShares>({});
   const [isHydrated, setIsHydrated] = useState(false);
   const [historyRefreshing, setHistoryRefreshing] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -121,6 +159,11 @@ export default function Home() {
     if (isHydrated) saveHiddenTripIds(hiddenTripIds);
   }, [hiddenTripIds, isHydrated]);
 
+  useEffect(() => {
+    if (isHydrated) savePaidShares(paidShares);
+  }, [paidShares, isHydrated]);
+
+
   // 1. Initial Load & Hydration
   useEffect(() => {
     async function init() {
@@ -136,6 +179,9 @@ export default function Home() {
       setTripHistory(savedHistory);
       setActiveParticipantId(savedActiveP);
       setHiddenTripIds(loadHiddenTripIds());
+      const cachedPaid = loadPaidShares();
+      confirmedPaidShares.current = cachedPaid;
+      setPaidShares(cachedPaid);
 
       // Check if joining via share URL param: ?trip=xyz
       const urlParams = new URLSearchParams(window.location.search);
@@ -186,12 +232,17 @@ export default function Home() {
 
       // Sync latest household and history from server
       try {
-        const [hhRes, histRes, serverHidden] = await Promise.all([
+        const [hhRes, histRes, serverHidden, serverPaid] = await Promise.all([
           fetch('/api/household'),
           fetch('/api/trips?view=history&summary=1'),
           fetchHiddenTripIds(),
+          fetchPaidShares(),
         ]);
         if (serverHidden) setHiddenTripIds(serverHidden);
+        if (serverPaid && paymentSave.current === 0) {
+          confirmedPaidShares.current = serverPaid;
+          setPaidShares(serverPaid);
+        }
         if (hhRes.ok) {
           const serverHousehold: Household = await hhRes.json();
           setHousehold(serverHousehold);
@@ -212,7 +263,7 @@ export default function Home() {
     }
 
     init();
-  }, [navigate]);
+  }, [navigate, setPaidShares]);
 
   // Update household locally and on server
   const handleUpdateHousehold = async (updated: Household) => {
@@ -274,6 +325,87 @@ export default function Home() {
       setSaveError('Could not hide or unhide that trip on the shared server. Please try again.');
     }
   };
+
+  // Loads the household's payments unless a save started since, whose reply is newer.
+  const refreshPaidShares = useCallback(async () => {
+    // A save in flight will bring back the server's record itself; a read now could land after it, stale.
+    if (pendingPayments.current.length > 0) return;
+    const startedAfter = paymentSave.current;
+    const paid = await fetchPaidShares();
+    if (paid && startedAfter === paymentSave.current && pendingPayments.current.length === 0) {
+      confirmedPaidShares.current = paid;
+      setPaidShares(paid);
+    }
+  }, [setPaidShares]);
+
+  // Another roommate may have recorded a payment on their phone; catch up when this tab comes back.
+  useEffect(() => {
+    if (!isHydrated) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refreshPaidShares();
+    };
+    window.addEventListener('focus', onVisible);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', onVisible);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [isHydrated, refreshPaidShares]);
+
+  // Shows the server's last confirmed record with any still-unsent changes on top.
+  const showConfirmedPayments = () =>
+    setPaidShares(pendingPayments.current.reduce((shares, pending) => pending.apply(shares), confirmedPaidShares.current));
+
+  // Shows a payment change at once, then saves it after any earlier saves. Returns whether the server accepted it.
+  const savePayments = (body: { paid: boolean; shares: ShareRef[] }, apply: (prev: PaidShares) => PaidShares) => {
+    paymentSave.current++;
+    const pending = { apply };
+    pendingPayments.current.push(pending);
+    setPaidShares(apply);
+
+    const send = async () => {
+      let ok = false;
+      try {
+        const response = await fetch('/api/payments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) throw new Error(`Server returned ${response.status}`);
+        confirmedPaidShares.current = sanitizePaidShares(await response.json());
+        setSaveError(null);
+        ok = true;
+      } catch (err) {
+        console.error('Error saving payments to server:', err);
+        setSaveError('Could not save that payment to the shared server. Please try again.');
+        // The save may or may not have landed; ask the server. Nothing else is sent until this returns.
+        const paid = await fetchPaidShares();
+        if (paid) confirmedPaidShares.current = paid;
+      }
+      pendingPayments.current = pendingPayments.current.filter((p) => p !== pending);
+      showConfirmedPayments();
+      return ok;
+    };
+
+    const result = paymentQueue.current.then(send);
+    paymentQueue.current = result.catch(() => undefined);
+    return result;
+  };
+
+  // Sends large changes in batches the server accepts, stopping at the first failure so its error stays shown.
+  const saveInBatches = async <T extends ShareRef>(shares: T[], save: (batch: T[]) => Promise<boolean>) => {
+    for (let i = 0; i < shares.length; i += MAX_SHARES_PER_REQUEST) {
+      if (!(await save(shares.slice(i, i + MAX_SHARES_PER_REQUEST)))) return false;
+    }
+    return true;
+  };
+
+  // Records roommates as having paid back the given amounts (their full share at the time).
+  const handleRecordPayments = (payments: SharePayment[]) =>
+    saveInBatches(payments, (batch) => savePayments({ paid: true, shares: batch }, (prev) => recordSharesPaid(prev, batch)));
+
+  const handleClearPayments = (shares: ShareRef[]) =>
+    saveInBatches(shares, (batch) => savePayments({ paid: false, shares: batch }, (prev) => clearSharesPaid(prev, batch)));
 
   const handleNewTrip = () => {
     if (
@@ -347,6 +479,7 @@ export default function Home() {
   };
 
   const handleOpenTrip = async (selected: Trip) => {
+    refreshPaidShares();
     const request = ++openRequest.current;
     setOpeningTrip(true);
     setHistoryError(null);
@@ -363,14 +496,15 @@ export default function Home() {
     }
   };
 
-  const handleOpenHistory = async () => {
-    navigate('history');
+  const handleOpenHistory = async (target: 'history' | 'settle-up' = 'history') => {
+    navigate(target);
     const request = ++historyRequest.current;
     setHistoryRefreshing(true);
     setHistoryError(null);
     fetchHiddenTripIds().then((ids) => {
       if (ids) setHiddenTripIds(ids);
     });
+    refreshPaidShares();
     try {
       const res = await fetch('/api/trips?view=history&summary=1');
       if (!res.ok) throw new Error('History request failed');
@@ -387,6 +521,14 @@ export default function Home() {
       if (request === historyRequest.current) setHistoryError('Could not refresh history. Showing saved runs.');
     } finally {
       if (request === historyRequest.current) setHistoryRefreshing(false);
+    }
+  };
+
+  const handleBackToActive = () => {
+    if (activeTrip) {
+      navigate(activeTrip.status === 'review' ? 'review' : activeTrip.status === 'settled' ? 'settlement' : 'claiming');
+    } else {
+      navigate('scanner');
     }
   };
 
@@ -408,7 +550,8 @@ export default function Home() {
         activeView={view}
         hasActiveTrip={Boolean(activeTrip && (view === 'claiming' || view === 'settlement' || view === 'review'))}
         onNewTrip={handleNewTrip}
-        onOpenHistory={handleOpenHistory}
+        onOpenHistory={() => handleOpenHistory('history')}
+        onOpenSettleUp={() => handleOpenHistory('settle-up')}
         onOpenHousehold={() => setIsHouseholdModalOpen(true)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         onOpenShare={() => setIsShareModalOpen(true)}
@@ -433,7 +576,7 @@ export default function Home() {
             onTripScanned={handleTripScanned}
             history={tripHistory}
             onOpenTrip={handleOpenTrip}
-            onOpenHistory={handleOpenHistory}
+            onOpenHistory={() => handleOpenHistory('history')}
           />
         )}
 
@@ -465,6 +608,9 @@ export default function Home() {
             household={household}
             onEditClaims={() => navigate('claiming')}
             onArchiveTrip={handleArchiveCurrentTrip}
+            paidShares={paidShares}
+            onRecordPayments={handleRecordPayments}
+            onClearPayments={handleClearPayments}
           />
         )}
 
@@ -476,20 +622,26 @@ export default function Home() {
             activeParticipantId={currentParticipantId}
             hiddenTripIds={hiddenTripIds}
             onToggleHidden={handleToggleHiddenTrip}
+            paidShares={paidShares}
+            onRecordPayments={handleRecordPayments}
+            onClearPayments={handleClearPayments}
+            onOpenSettleUp={() => handleOpenHistory('settle-up')}
             onSelectTrip={handleOpenTrip}
-            onBackToActive={() => {
-              if (activeTrip) {
-                navigate(
-                  activeTrip.status === 'review'
-                    ? 'review'
-                    : activeTrip.status === 'settled'
-                    ? 'settlement'
-                    : 'claiming'
-                );
-              } else {
-                navigate('scanner');
-              }
-            }}
+            onBackToActive={handleBackToActive}
+          />
+        )}
+
+        {view === 'settle-up' && (
+          <SettleUp
+            refreshing={historyRefreshing}
+            history={tripHistory}
+            household={household}
+            paidShares={paidShares}
+            hiddenTripIds={hiddenTripIds}
+            activeParticipantId={currentParticipantId}
+            onRecordPayments={handleRecordPayments}
+            onSelectTrip={handleOpenTrip}
+            onBack={handleBackToActive}
           />
         )}
       </main>

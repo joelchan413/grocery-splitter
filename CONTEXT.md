@@ -56,6 +56,18 @@ _Avoid_: Lock state, submission, checkout
 The finalized breakdown of how much each participant owes the payer for a specific trip, with Venmo deep links and copyable chat summaries.
 _Avoid_: Bill, invoice, payout
 
+**Paid Share**:
+A record of how much one participant has paid the payer back on one trip. Kept apart from the trip itself, so a share that grows later shows the difference as owed.
+_Avoid_: Receipt, transaction, payment log
+
+**Paid Out**:
+A trip on which every participant who owes the payer has a paid share. Paid-out trips leave the combined settlement.
+_Avoid_: Closed, done, cleared
+
+**Combined Settlement**:
+The netted sum of every unpaid share across trips, so each participant sends one payment per person they owe instead of one per trip.
+_Avoid_: Batch payment, rollup, tab
+
 **Trip Archive**:
 A persistent chronological record of all past grocery trips, itemized claims, and settlement breakdowns.
 _Avoid_: Receipt box, history log, ledger

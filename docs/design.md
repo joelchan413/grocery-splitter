@@ -55,6 +55,7 @@ Each screen answers one question first.
 | Claiming | What is mine? | The item list, with the roommate picker above |
 | Settlement | Who owes the payer what? | What the payer gets back |
 | Trip history | Which run was that? | One row per run |
+| Settle up | What one payment clears every unpaid run? | One payment per pair of roommates |
 
 The new-run screen also shows the last run as a ledger: what the payer gets back, and what each roommate owes so far with a thin proportional bar. Only a single largest share is drawn in ink, so equal shares read as equal. The payer's figure is the sum of the rounded amounts shown beneath it. With no history, the card lists each roommate's Venmo handle with a dash for the amount.
 
@@ -62,7 +63,11 @@ Amounts always add up to the bill. Each roommate's payment is rounded to the cen
 
 Trip history shows saved runs immediately with “Refreshing history…” while it checks the server. Its history request omits embedded receipt photos; complete trips are fetched before opening them or exporting photos. Failed refreshes keep saved runs visible and explain the error.
 
-Trip history also holds the CSV export. Each row has a checkbox for the export and a button to hide the run for the whole household; hidden runs are left out of exports.
+Trip history also holds the CSV export. Each row has a checkbox for the export and a button to hide the run for the whole household; hidden runs are left out of exports. A third button marks everyone on a run as paid, and a banner above the export links to Settle up while any visible run is unpaid. Partly paid runs show how many roommates have paid, such as "1 of 3 paid".
+
+Payments are tracked per roommate per run, with the amount each one covered. A run is paid out once every roommate who owes on it has paid their current share; a run on which nobody owes anything needs no payments. If a share grows after it was paid, only the difference shows as owed. Runs whose payer has left the household are never combined, since there is nobody to repay; Settle up names them instead. Payments refresh when the tab regains focus, so a payment recorded on another phone shows up without reloading. On the settlement screen, each roommate who owes has a Paid toggle, the payer card shows how much has been received, and one button marks everyone paid. Un-marking everyone asks for confirmation.
+
+Settle up combines every unpaid share on runs that are past item checking and not hidden. Each roommate gets one payment, with one Venmo link, to each person they owe. When two roommates owe each other, the smaller debt is subtracted from the larger; if the debts cancel exactly, the pair shows as even with nothing to send. Amounts are summed in whole cents, so a combined payment equals the sum of the per-run amounts. Each payment opens to the runs it covers, and its Paid button records every share it clears, in both directions. "Mark all as paid" records every remaining share. The run list says who still owes on each run.
 
 Trip screens share one 896px content width, so the receipt-photo bar and the screen below it start on the same edge.
 
@@ -99,7 +104,7 @@ Run before shipping a UI change:
 ```
 npm run build
 npx eslint
-node --test tests/codex.test.mjs tests/server-db.test.mjs tests/trip-history.test.mjs
+node --test tests/codex.test.mjs tests/server-db.test.mjs tests/trip-history.test.mjs tests/combined-balances.test.mjs
 npx playwright test tests/app-design.spec.ts
 ```
 

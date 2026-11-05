@@ -1,12 +1,14 @@
 'use client';
 
 import React from 'react';
-import { ArrowLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, ChevronRight, CircleCheck, CircleDollarSign, Eye, EyeOff, HandCoins } from 'lucide-react';
 import { Trip, Household, Participant } from '@/types';
 import { calculateTripSettlement } from '@/lib/calculations';
 import { sortTripHistory } from '@/lib/trip-history';
 import { selectTripsForExport } from '@/lib/export-csv';
 import { ExportCsv } from '@/components/ExportCsv';
+import { tripPaymentStatus } from '@/lib/combined-balances';
+import type { PaidShares, ShareRef, SharePayment } from '@/lib/payments';
 import { Avatar } from './Avatar';
 import { TRIP_STATUS_LABEL, formatRunDate } from './ScannerHome';
 
@@ -17,6 +19,10 @@ interface TripHistoryProps {
   activeParticipantId?: string;
   hiddenTripIds?: string[];
   onToggleHidden?: (tripId: string) => void;
+  paidShares?: PaidShares;
+  onRecordPayments?: (payments: SharePayment[]) => void;
+  onClearPayments?: (shares: ShareRef[]) => void;
+  onOpenSettleUp?: () => void;
   onSelectTrip: (trip: Trip) => void;
   onBackToActive: () => void;
 }
@@ -30,6 +36,10 @@ export function TripHistory({
   activeParticipantId,
   hiddenTripIds = [],
   onToggleHidden,
+  paidShares = {},
+  onRecordPayments,
+  onClearPayments,
+  onOpenSettleUp,
   onSelectTrip,
   onBackToActive,
 }: TripHistoryProps) {
@@ -39,11 +49,20 @@ export function TripHistory({
   const [deselectedIds, setDeselectedIds] = React.useState<string[]>([]);
 
   const hiddenSet = React.useMemo(() => new Set(hiddenTripIds), [hiddenTripIds]);
+  const paymentStatus = React.useMemo(
+    () => new Map(sortedHistory.map((trip) => [trip.id, tripPaymentStatus(trip, household, paidShares)])),
+    [sortedHistory, household, paidShares]
+  );
   const visibleHistory = React.useMemo(
     () => sortedHistory.filter((trip) => !hiddenSet.has(trip.id)),
     [sortedHistory, hiddenSet]
   );
   const hiddenCount = sortedHistory.length - visibleHistory.length;
+  // Counted the way Settle up counts, so the banner never promises runs it can't combine.
+  const unpaidCount = visibleHistory.filter((trip) => {
+    const status = paymentStatus.get(trip.id);
+    return trip.status !== 'review' && status && !status.payerMissing && !status.isPaidOut;
+  }).length;
   const listedHistory = showHidden ? sortedHistory : visibleHistory;
   const exportTrips = React.useMemo(
     () => selectTripsForExport(sortedHistory, hiddenTripIds, deselectedIds),
@@ -74,6 +93,25 @@ export function TripHistory({
       </div>
 
       {refreshing && <p role="status" className="mb-4 text-sm text-slate-500">Refreshing history…</p>}
+
+      {onOpenSettleUp && unpaidCount > 0 && (
+        <button
+          type="button"
+          onClick={onOpenSettleUp}
+          className="mb-4 flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left hover:border-slate-400 cursor-pointer"
+        >
+          <span className="flex items-center gap-3">
+            <HandCoins className="h-5 w-5 flex-none text-slate-500" aria-hidden="true" />
+            <span>
+              <span className="block text-base font-medium text-slate-900">
+                {unpaidCount} unpaid {unpaidCount === 1 ? 'run' : 'runs'}
+              </span>
+              <span className="block text-sm text-slate-500">Settle up with one payment per roommate</span>
+            </span>
+          </span>
+          <ChevronRight className="h-4 w-4 text-slate-500" aria-hidden="true" />
+        </button>
+      )}
 
       <ExportCsv history={exportTrips} household={household} participantId={activeParticipantId} />
 
@@ -117,6 +155,11 @@ export function TripHistory({
           <ul className="space-y-3">
             {listedHistory.map((trip) => {
               const isHidden = hiddenSet.has(trip.id);
+              const payments = paymentStatus.get(trip.id);
+              const canMarkPaid = trip.status !== 'review' && Boolean(payments?.debts.length);
+              // A run nobody owes on is paid out too, though there is nothing to mark.
+              const isPaid = trip.status !== 'review' && Boolean(payments?.isPaidOut);
+              const isPartlyPaid = canMarkPaid && !isPaid && Boolean(payments?.paidCount);
               const storeLabel = trip.storeName || 'Grocery store';
               const dateLabel = trip.date ? formatRunDate(trip.date) : 'unknown date';
               const payer =
@@ -154,6 +197,10 @@ export function TripHistory({
                           <span className="text-base font-medium text-slate-900">{storeLabel}</span>
                           {isHidden ? (
                             <span className="status-pill status-pill-settled">Hidden</span>
+                          ) : isPaid ? (
+                            <span className="status-pill status-pill-paid">Paid out</span>
+                          ) : isPartlyPaid && payments ? (
+                            <span className="status-pill status-pill-review">{payments.paidCount} of {payments.debts.length} paid</span>
                           ) : (
                             <span className={`status-pill status-pill-${trip.status}`}>{TRIP_STATUS_LABEL[trip.status] ?? trip.status}</span>
                           )}
@@ -169,6 +216,24 @@ export function TripHistory({
                       <ChevronRight className="h-4 w-4 text-slate-500 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                     </span>
                   </button>
+                  {onRecordPayments && onClearPayments && canMarkPaid && payments && (
+                    <button
+                      type="button"
+                      aria-pressed={isPaid}
+                      aria-label={`${isPaid ? 'Mark unpaid' : 'Mark everyone paid'}: ${storeLabel} on ${dateLabel}`}
+                      title={isPaid ? 'Paid out. Click to mark everyone unpaid' : 'Mark everyone on this run as paid'}
+                      onClick={() => {
+                        if (!isPaid) {
+                          onRecordPayments(payments.unpaid.map((d) => ({ tripId: trip.id, participantId: d.participant.id, cents: d.owedCents })));
+                        } else if (confirm(`Mark everyone on ${storeLabel} (${dateLabel}) as unpaid?`)) {
+                          onClearPayments(payments.debts.map((d) => ({ tripId: trip.id, participantId: d.participant.id })));
+                        }
+                      }}
+                      className={`shrink-0 rounded-full p-2 hover:bg-slate-100 cursor-pointer ${isPaid ? 'text-positive' : 'text-slate-500 hover:text-slate-900'}`}
+                    >
+                      {isPaid ? <CircleCheck className="h-4 w-4" aria-hidden="true" /> : <CircleDollarSign className="h-4 w-4" aria-hidden="true" />}
+                    </button>
+                  )}
                   {onToggleHidden && (
                     <button
                       type="button"

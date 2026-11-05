@@ -24,8 +24,10 @@ function loadModule(relPath) {
   const mod = { exports: {} };
   const fn = new Function('module', 'exports', 'require', compiled);
   fn(mod, mod.exports, (name) => {
+    if (name === '@/lib/trip-cache') return { loadCachedTrip: async () => null, cacheTrip: async () => {} };
     if (name === '@/types') return {};
     if (name === '@/lib/calculations') return loadModule('../src/lib/calculations.ts');
+    if (name === '@/lib/trip-sync') return loadModule('../src/lib/trip-sync.ts');
     if (name === '@/lib/trip-history') return loadModule('../src/lib/trip-history.ts');
     if (name === '@/lib/person') return loadModule('../src/lib/person.ts');
     if (name === '@/lib/payments') return loadModule('../src/lib/payments.ts');

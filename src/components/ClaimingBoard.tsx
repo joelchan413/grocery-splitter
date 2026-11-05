@@ -127,7 +127,7 @@ export function ClaimingBoard({
   };
 
   // Live estimate calculation for active participant
-  const liveSummary = calculateTripSettlement(trip, household);
+  const liveSummary = React.useMemo(() => calculateTripSettlement(trip, household), [trip, household]);
   const activeSettlement = liveSummary.participants.find(
     (p) => p.participantId === activeParticipantId
   );

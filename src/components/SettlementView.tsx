@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Send, Copy, Check, Edit3, ChevronDown, ChevronUp, Archive, CircleCheck, CircleDollarSign } from 'lucide-react';
 import { Household, Trip } from '@/types';
 import { calculateTripSettlement, round2 } from '@/lib/calculations';
@@ -34,7 +34,7 @@ export function SettlementView({
   const [copiedSummary, setCopiedSummary] = useState(false);
   const [expandedParticipantId, setExpandedParticipantId] = useState<string | null>(null);
 
-  const summary = calculateTripSettlement(trip, household);
+  const summary = useMemo(() => calculateTripSettlement(trip, household), [trip, household]);
   const payer = summary.payer;
   const splitWays = household.participants.length;
 
@@ -44,7 +44,10 @@ export function SettlementView({
   );
 
   // Payments are only tracked while whoever paid is still in the household.
-  const payments = tripPaymentStatus(trip, household, paidShares);
+  const payments = useMemo(
+    () => tripPaymentStatus(trip, household, paidShares, summary),
+    [trip, household, paidShares, summary]
+  );
   const tracksPayments = Boolean(onRecordPayments && onClearPayments) && !payments.payerMissing && payments.debts.length > 0;
   const debtFor = (participantId: string) => payments.debts.find((d) => d.participant.id === participantId);
   const isPaidOut = payments.isPaidOut && payments.debts.length > 0;

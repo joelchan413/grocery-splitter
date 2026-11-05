@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { scanReceipt, TRADER_JOES } from './fixtures/receipts';
 
 test.describe('GrocerySplit Complete User Flow and UI Audit', () => {
   test('full end-to-end receipt scanning, review, claiming, settlement, and archiving', async ({ page }) => {
@@ -35,8 +36,8 @@ test.describe('GrocerySplit Complete User Flow and UI Audit', () => {
     await expect(page.getByText('Ready to scan receipts.')).toBeVisible();
     await page.getByRole('button', { name: 'Close', exact: true }).click();
 
-    // 2. Select Sample Trader Joe's Receipt
-    await page.getByRole('button', { name: /Trader Joe's.*Open sample/i }).click();
+    // 2. Scan Trader Joe's receipt (mocked)
+    await scanReceipt(page, TRADER_JOES);
 
     // 3. Verify Review Screen
     await expect(page.getByRole('heading', { name: 'Check receipt items' })).toBeVisible();

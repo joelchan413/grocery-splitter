@@ -1,6 +1,7 @@
 import { chromium } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+import { scanReceipt, TRADER_JOES } from '../tests/fixtures/receipts';
 
 async function runVisualAudit() {
   console.log('🚀 Capturing Light & Dark Mode Screenshots for UI Inspection...');
@@ -27,8 +28,8 @@ async function runVisualAudit() {
     await page.goto('http://localhost:3000');
     await page.waitForLoadState('networkidle');
 
-    // 2. Load Sample Receipt & Review Screen
-    await page.getByText(/Trader Joe's Run/i).click();
+    // 2. Scan receipt (mocked) & Review Screen
+    await scanReceipt(page, TRADER_JOES);
     await page.waitForTimeout(300);
 
     // 3. Open Claiming Board

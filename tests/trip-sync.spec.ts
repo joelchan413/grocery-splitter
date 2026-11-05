@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { readCachedTrip, photoRecordCount } from './helpers/trip-cache';
 import { DEFAULT_HOUSEHOLD } from '../src/lib/storage';
-import { SAMPLE_RECEIPTS } from '../src/lib/receipts';
 import type { Trip } from '../src/types';
+import { TRADER_JOES } from './fixtures/receipts';
 
 declare global {
   interface Window {
@@ -14,7 +14,7 @@ declare global {
 const photo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a4ioAAAAASUVORK5CYII=';
 function makeTrip(): Trip {
   return {
-    ...SAMPLE_RECEIPTS[0].data,
+    ...TRADER_JOES,
     id: `sync-${crypto.randomUUID()}`,
     householdId: DEFAULT_HOUSEHOLD.id,
     payerId: 'p1', receiptImages: [photo], claims: {}, readyParticipantIds: [],

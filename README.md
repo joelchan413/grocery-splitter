@@ -4,7 +4,7 @@ A collaborative receipt-scanning and grocery-splitting web application designed 
 
 ## ✨ Features
 
-- 📸 **Receipt Scanning (Codex CLI)**: Upload 1–3 receipt photos or choose pre-configured sample receipts (Trader Joe's, Costco).
+- 📸 **Receipt Scanning (Codex CLI)**: Upload 1–3 receipt photos.
 - 🏷️ **Proportional Tax Attribution (ADR 0001)**: Sales tax applies **only** to roommates who claimed taxable items, weighted proportionally by their taxable item subtotal.
 - 🏡 **Household Shared Staples**: Unclaimed items and leftover quantities automatically split 4 ways across all household roommates.
 - 👥 **1-Tap Collaborative Claiming**: Claim individual items, specific counts (e.g. 2 of 3 avocados), or split with custom sub-groups.
@@ -35,7 +35,7 @@ npm install -g @openai/codex@0.160.1
 codex -c 'cli_auth_credentials_store="file"' login
 ```
 
-The app uses the saved server login through `codex exec`; it does not require a Gemini or OpenAI API key. Sample receipts work without signing in. Settings shows whether the server has a saved login. This checks the local login, not model availability or remaining account usage.
+The app uses the saved server login through `codex exec`; it does not require a Gemini or OpenAI API key. Settings shows whether the server has a saved login. This checks the local login, not model availability or remaining account usage.
 
 The CLI selects its default model unless `RECEIPT_CODEX_MODEL` is set in the server environment. Other user CLI configuration is ignored for receipt scans. For local Next.js development, put this optional setting in `.env.local`. On Windows, install the native executable and set `RECEIPT_CODEX_BIN` to its absolute path if `codex` resolves to an npm `.cmd` wrapper.
 

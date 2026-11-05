@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { DEFAULT_HOUSEHOLD } from '../src/lib/storage';
-import { SAMPLE_RECEIPTS } from '../src/lib/receipts';
 import type { Trip } from '../src/types';
+import { scanReceipt, TRADER_JOES, COSTCO } from './fixtures/receipts';
 
 // All API traffic is mocked so this suite never writes to the local or deployed database.
 test.beforeEach(async ({ page }) => {
@@ -14,7 +14,7 @@ test.beforeEach(async ({ page }) => {
     const request = route.request();
     const url = new URL(request.url());
     if (url.pathname === '/api/household') return route.fulfill({ json: DEFAULT_HOUSEHOLD });
-    if (url.pathname === '/api/scan-receipt') return route.fulfill({ json: SAMPLE_RECEIPTS[0].data });
+    if (url.pathname === '/api/scan-receipt') return route.fulfill({ json: TRADER_JOES });
     if (url.pathname.endsWith('/events')) {
       return route.fulfill({ contentType: 'text/event-stream', body: ': connected\n\n' });
     }
@@ -55,7 +55,7 @@ test('a new run keeps the chosen payer and photo through scanning, and offers th
 test('the last run lists what each roommate owes, and reopens the trip', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: /^Jordan/ }).click();
-  await page.getByRole('button', { name: /Trader Joe's.*Open sample/ }).click();
+  await scanReceipt(page, TRADER_JOES);
   await page.getByRole('button', { name: 'Open for roommate claims' }).click();
   await page.getByRole('button', { name: /New trip/ }).click();
   // The app asks in its own dialog, never the browser's confirm().
@@ -72,7 +72,7 @@ test('the last run lists what each roommate owes, and reopens the trip', async (
 
 test('the payer sees their own share, and the shares add up to the bill', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /Trader Joe's.*Open sample/ }).click();
+  await scanReceipt(page, TRADER_JOES);
   await page.getByRole('button', { name: 'Open for roommate claims' }).click();
   await expect(page.getByText("Joel's own share")).toBeVisible();
   // $56.50 split four ways: three roommates pay $14.13 each, and the payer keeps the remaining $14.11.
@@ -98,7 +98,7 @@ test('roommates keep their own colour on every screen', async ({ page }) => {
   await expect(joel).toHaveAttribute('style', /--person:\s*#2563EB/i);
   const background = await joel.evaluate(element => getComputedStyle(element).backgroundColor);
   expect(background).not.toBe('rgba(0, 0, 0, 0)');
-  await page.getByRole('button', { name: /Trader Joe's.*Open sample/ }).click();
+  await scanReceipt(page, TRADER_JOES);
   await page.getByRole('button', { name: 'Open for roommate claims' }).click();
   await expect(page.locator('.avatar').filter({ hasText: 'A' }).first()).toHaveAttribute('style', /--person:\s*#059669/i);
   // No emoji avatars remain in the interface.
@@ -130,7 +130,7 @@ test('dialogs are labelled, keep focus inside, close with Escape, and history ro
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Settings' })).toBeHidden();
 
-  await page.getByRole('button', { name: /Costco Wholesale.*Open sample/ }).click();
+  await scanReceipt(page, COSTCO);
   await page.getByRole('button', { name: 'History' }).click();
   await expect(page.getByRole('heading', { name: 'Trip history' })).toBeVisible();
   const row = page.getByRole('button', { name: /^Costco Wholesale/ });
@@ -143,7 +143,7 @@ test('every screen fits phone, tablet and desktop, and the sidebar folds below 1
   await page.goto('/');
   const screens: [string, () => Promise<void>][] = [
     ['new run', async () => {}],
-    ['review', async () => { await page.getByRole('button', { name: /Costco Wholesale.*Open sample/ }).click(); }],
+    ['review', async () => { await scanReceipt(page, COSTCO); }],
     ['claiming', async () => { await page.getByRole('button', { name: 'Open for roommate claims' }).click(); }],
     ['settlement', async () => { await page.getByRole('button', { name: 'View balances' }).click(); }],
     ['history', async () => { await page.getByRole('button', { name: 'History' }).click(); }],
@@ -170,7 +170,7 @@ test('the share dialog draws its QR code locally and never sends the trip link e
     if (!['localhost', '127.0.0.1'].includes(url.hostname)) outside.push(url.hostname);
   });
   await page.goto('/');
-  await page.getByRole('button', { name: /Trader Joe's.*Open sample/ }).click();
+  await scanReceipt(page, TRADER_JOES);
   await page.getByRole('button', { name: 'Open for roommate claims' }).click();
   await page.getByRole('button', { name: 'Share live trip' }).click();
   const dialog = page.getByRole('dialog', { name: 'Share this trip' });
@@ -187,7 +187,7 @@ test('the share dialog draws its QR code locally and never sends the trip link e
 test('history refresh shows progress, transfers no photos, and loads the complete trip before opening', async ({ page }) => {
   const full: Trip = {
     id: 'history-photo', householdId: DEFAULT_HOUSEHOLD.id, storeName: 'Photo market',
-    date: new Date().toISOString().slice(0, 10), payerId: 'p1', items: SAMPLE_RECEIPTS[0].data.items,
+    date: new Date().toISOString().slice(0, 10), payerId: 'p1', items: TRADER_JOES.items,
     taxTotal: 0, basketDiscount: 0, receiptImages: [`data:image/png;base64,${receiptPhoto.buffer.toString('base64')}`],
     claims: {}, readyParticipantIds: [], status: 'settled', createdAt: new Date().toISOString(),
   };
@@ -267,7 +267,7 @@ test('failed history refresh explains that saved trips are being shown', async (
 
 test('Back, Forward and reload keep each screen, and the trip steps move between them', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /Trader Joe's.*Open sample/ }).click();
+  await scanReceipt(page, TRADER_JOES);
   await expect(page).toHaveURL(/view=review/);
   await page.getByRole('button', { name: 'Open for roommate claims' }).click();
   await page.getByRole('button', { name: /^Claim:/ }).first().click();
@@ -300,7 +300,7 @@ test('Back, Forward and reload keep each screen, and the trip steps move between
 
 test('trip addresses name their trip, edits on Check items survive Back, and History survives a reload', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /Trader Joe's.*Open sample/ }).click();
+  await scanReceipt(page, TRADER_JOES);
   await page.getByRole('button', { name: 'Open for roommate claims' }).click();
   await expect(page).toHaveURL(/view=claiming&trip=trip-/);
 
@@ -322,7 +322,7 @@ test('trip addresses name their trip, edits on Check items survive Back, and His
 
 test('a run still being checked cannot be opened at a later step by address', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /Costco Wholesale.*Open sample/ }).click();
+  await scanReceipt(page, COSTCO);
   await expect(page.getByRole('heading', { name: 'Check receipt items' })).toBeVisible();
   const url = new URL(page.url());
   url.searchParams.set('view', 'settlement');
@@ -337,7 +337,7 @@ test('fixing an item on an archived run keeps it archived and can return straigh
     if (request.method() === 'PATCH' && request.url().includes('/api/trips/')) saved = request.postDataJSON() as Trip;
   });
   await page.goto('/');
-  await page.getByRole('button', { name: /Trader Joe's.*Open sample/ }).click();
+  await scanReceipt(page, TRADER_JOES);
   await page.getByRole('button', { name: 'Open for roommate claims' }).click();
   await page.getByRole('button', { name: 'View balances' }).click();
   await page.getByRole('button', { name: 'Finish and archive' }).click();
@@ -360,7 +360,7 @@ test('a failed history refresh on reload is explained too', async ({ page }) => 
 
 test('starting a new trip keeps edits made on Check items', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /Trader Joe's.*Open sample/ }).click();
+  await scanReceipt(page, TRADER_JOES);
   await page.getByLabel('Store').fill('Kept market');
   await page.getByRole('button', { name: /New trip/ }).click();
   await page.getByRole('alertdialog', { name: 'Start a new trip?' }).getByRole('button', { name: 'Start new trip' }).click();
@@ -369,7 +369,7 @@ test('starting a new trip keeps edits made on Check items', async ({ page }) => 
 
 test('Back closes a dialog with its screen, and Split all only shows once an item is claimed', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /Trader Joe's.*Open sample/ }).click();
+  await scanReceipt(page, TRADER_JOES);
   await page.getByRole('button', { name: 'Open for roommate claims' }).click();
   await expect(page.getByRole('button', { name: /^Split all:/ })).toHaveCount(0);
   await page.getByRole('button', { name: /^Claim:/ }).first().click();
@@ -384,7 +384,7 @@ test('Back closes a dialog with its screen, and Split all only shows once an ite
 
 test('the new-run screen survives a reload while a trip is open', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /Trader Joe's.*Open sample/ }).click();
+  await scanReceipt(page, TRADER_JOES);
   await expect(page.getByRole('heading', { name: 'Check receipt items' })).toBeVisible();
   await page.goBack();
   await expect(page.getByRole('heading', { name: 'New grocery run' })).toBeVisible();

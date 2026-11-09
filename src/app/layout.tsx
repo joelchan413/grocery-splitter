@@ -8,6 +8,8 @@ const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], displa
 export const metadata: Metadata = {
   title: "GrocerySplit",
   description: "Split grocery receipts with your household, down to each item and its tax.",
+  icons: { apple: "/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: "GrocerySplit", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

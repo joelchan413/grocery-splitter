@@ -78,10 +78,12 @@ test('ready trips nobody was told about get caught up; only recent ones are anno
   const told = trip('t3', 'p1', { p2: 10 }, { readyParticipantIds: allReady, updatedAt: '2026-11-03T14:59:00.000Z' });
   const hidden = trip('t4', 'p1', { p2: 10 }, { readyParticipantIds: allReady, updatedAt: '2026-11-03T14:59:00.000Z' });
   const waiting = trip('t5', 'p1', { p2: 10 }, { readyParticipantIds: ['p1'] });
+  const archived = trip('t6', 'p1', { p2: 10 }, { status: 'settled', readyParticipantIds: allReady, updatedAt: '2026-11-03T14:59:00.000Z' });
+  const reviewing = trip('t7', 'p1', { p2: 10 }, { status: 'review', readyParticipantIds: allReady, updatedAt: '2026-11-03T14:59:00.000Z' });
   const state = { ...empty(), allReady: { t3: '2026-11-03T14:00:00.000Z' } };
-  const { mark, announce } = rules.readyTripsToCatchUp([recent, old, told, hidden, waiting], household, ['t4'], state, now);
-  assert.deepEqual(mark.map((t) => t.id), ['t1', 't2']);
-  assert.deepEqual(announce.map((t) => t.id), ['t1']);
+  const { mark, announce } = rules.readyTripsToCatchUp([recent, old, told, hidden, waiting, archived, reviewing], household, ['t4'], state, now);
+  assert.deepEqual(mark.map((t) => t.id), ['t1', 't2', 't6']);
+  assert.deepEqual(announce.map((t) => t.id), ['t1', 't6'], 'archived during the wait, just before a restart');
 });
 
 // ----------------- 3. Payment received -----------------

@@ -39,8 +39,10 @@ const READY_SETTLE_MS = 30 * 1000;
 const CLAIMS_SETTLE_MS = 3 * 60 * 1000;
 const PUSH_TTL_SECONDS = 24 * 60 * 60;
 
+/** The key browsers subscribe with, only when the whole key pair is set, so phones never subscribe to a server that can't send. */
 export function vapidPublicKey(): string | null {
-  return process.env.VAPID_PUBLIC_KEY?.trim() || null;
+  const publicKey = process.env.VAPID_PUBLIC_KEY?.trim();
+  return publicKey && process.env.VAPID_PRIVATE_KEY?.trim() ? publicKey : null;
 }
 
 function configureWebPush(): boolean {

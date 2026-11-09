@@ -240,7 +240,8 @@ export function readyTripsToCatchUp(
 ): { mark: Trip[]; announce: Trip[] } {
   const hidden = new Set(hiddenIds);
   const mark = trips.filter((trip) =>
-    trip && trip.status === 'claiming' && !hidden.has(trip.id) && !state.allReady[trip.id] && isEveryoneReady(trip, household));
+    // Archived trips too: one archived during the 30-second wait, just before a restart, would otherwise be missed.
+    trip && !hidden.has(trip.id) && !state.allReady[trip.id] && isEveryoneReady(trip, household));
   const announce = mark.filter((trip) => {
     const changed = timeOf(trip.updatedAt) ?? timeOf(trip.createdAt);
     return changed != null && now.getTime() - changed < REMINDER_DELAY_MS;

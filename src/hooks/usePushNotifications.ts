@@ -94,7 +94,15 @@ export function usePushNotifications(): PushNotifications {
         registration.current = reg;
         publicKey.current = keyResponse.ok ? ((await keyResponse.json()).publicKey ?? null) : null;
         const existing = await reg.pushManager.getSubscription();
-        const linked = readLinked();
+        let linked = readLinked();
+        if (existing && !linked && publicKey.current) {
+          // Local storage was cleared but the phone is still subscribed: ask the server whose it is,
+          // so Settings never says "off" while notifications keep arriving.
+          const res = await fetch(`/api/push?endpoint=${encodeURIComponent(existing.endpoint)}`, { cache: 'no-store' });
+          linked = res.ok ? ((await res.json()).participantId ?? null) : null;
+          if (linked) writeLinked(linked);
+          else await existing.unsubscribe().catch(() => false);
+        }
         if (cancelled) return;
         if (!publicKey.current) setStatus('not-configured');
         else if (Notification.permission === 'denied') setStatus('denied');

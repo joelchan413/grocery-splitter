@@ -89,17 +89,16 @@ function storeName(trip: Trip): string {
   return trip.storeName?.trim() || 'the grocery run';
 }
 
-/** "Costco", "Costco and Aldi", "Costco, Aldi and Trader Joe's", or "4 trips". */
-function listStores(trips: readonly Trip[]): string {
-  const names = trips.map(storeName);
-  if (names.length > 3) return `${names.length} trips`;
-  if (names.length <= 1) return names[0] ?? 'groceries';
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-}
-
+/** "a", "a and b", "a, b and c". */
 function listPhrases(phrases: readonly string[]): string {
   if (phrases.length <= 1) return phrases[0] ?? '';
   return `${phrases.slice(0, -1).join(', ')} and ${phrases[phrases.length - 1]}`;
+}
+
+/** "Costco", "Costco and Aldi", "Costco, Aldi and Trader Joe's", or "4 trips". */
+function listStores(trips: readonly Trip[]): string {
+  if (trips.length > 3) return `${trips.length} trips`;
+  return trips.length ? listPhrases(trips.map(storeName)) : 'groceries';
 }
 
 const tripUrl = (view: 'claiming' | 'settlement', trip: Trip) =>
@@ -227,11 +226,33 @@ export function paymentReceivedMessages(
   return outgoing;
 }
 
+/**
+ * Trips where everyone is done but nobody was told: the 30-second wait was cut short by a restart,
+ * the trip was unhidden, or it was ready before notifications existed. Each gets its marker so the
+ * payment reminder can start; only trips changed in the last day are announced, so old trips stay quiet.
+ */
+export function readyTripsToCatchUp(
+  trips: readonly Trip[],
+  household: Household,
+  hiddenIds: readonly string[],
+  state: NotificationState,
+  now: Date
+): { mark: Trip[]; announce: Trip[] } {
+  const hidden = new Set(hiddenIds);
+  const mark = trips.filter((trip) =>
+    trip && trip.status === 'claiming' && !hidden.has(trip.id) && !state.allReady[trip.id] && isEveryoneReady(trip, household));
+  const announce = mark.filter((trip) => {
+    const changed = timeOf(trip.updatedAt) ?? timeOf(trip.createdAt);
+    return changed != null && now.getTime() - changed < REMINDER_DELAY_MS;
+  });
+  return { mark, announce };
+}
+
 // ----------------- 4. Share went up after paying -----------------
 
 /**
- * Roommates who had paid but now owe more because claims changed. `notified` is what each was
- * last told for this trip, so a share is only announced again when it grows further.
+ * Roommates who had paid but now owe more because claims changed. `notified` is what each still
+ * owed when last checked, so a share is only announced again when it grows past that.
  */
 export function shareIncreaseMessages(
   trip: Trip,
@@ -248,7 +269,7 @@ export function shareIncreaseMessages(
   for (const debt of status.debts) {
     if (debt.paidCents === 0 || debt.remainingCents === 0) continue;
     const id = debt.participant.id;
-    next[id] = Math.max(debt.remainingCents, notified[id] ?? 0);
+    next[id] = debt.remainingCents;
     if (debt.remainingCents <= (notified[id] ?? 0)) continue;
     outgoing.push({
       participantId: id,

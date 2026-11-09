@@ -6,6 +6,7 @@ import vm from 'node:vm';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+import { loadLib } from './helpers/load-lib.mjs';
 
 const nodeRequire = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -21,20 +22,6 @@ const paymentsSource = fs.readFileSync(path.join(__dirname, '../src/lib/payments
 new Function('module', 'exports', ts.transpileModule(paymentsSource, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText)(paymentsModule, paymentsModule.exports);
-
-// Loads a module from src/lib, resolving its own '@/lib/...' imports the same way.
-const libModules = new Map();
-function loadLib(name) {
-  if (!libModules.has(name)) {
-    const mod = { exports: {} };
-    libModules.set(name, mod);
-    const libSource = fs.readFileSync(path.join(__dirname, `../src/lib/${name}.ts`), 'utf8');
-    new Function('module', 'exports', 'require', ts.transpileModule(libSource, {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
-    }).outputText)(mod, mod.exports, (dep) => dep.startsWith('@/lib/') ? loadLib(dep.slice(6)) : nodeRequire(dep));
-  }
-  return libModules.get(name).exports;
-}
 
 const source = fs.readFileSync(path.join(__dirname, '../src/lib/server-db.ts'), 'utf8');
 const compiled = ts.transpileModule(source, {

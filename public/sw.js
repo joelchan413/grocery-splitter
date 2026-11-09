@@ -58,6 +58,8 @@ self.addEventListener('pushsubscriptionchange', (event) => {
           applicationServerKey: publicKey,
         });
       }
+      // Without the old endpoint the server can't tell whose device this is. The app saves the
+      // new subscription for the right roommate the next time it is opened.
       if (!oldEndpoint) return;
       await fetch('/api/push', {
         method: 'POST',

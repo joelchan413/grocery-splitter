@@ -43,6 +43,15 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
+// Not every browser accepts the key as text, so it is passed as bytes.
+function base64UrlToBytes(base64) {
+  const padded = (base64 + '='.repeat((4 - (base64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(padded);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return bytes;
+}
+
 // Browsers occasionally renew a subscription. Move the new one to the same roommate.
 self.addEventListener('pushsubscriptionchange', (event) => {
   event.waitUntil(
@@ -55,7 +64,7 @@ self.addEventListener('pushsubscriptionchange', (event) => {
         if (!publicKey) return;
         subscription = await self.registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: publicKey,
+          applicationServerKey: base64UrlToBytes(publicKey),
         });
       }
       // Without the old endpoint the server can't tell whose device this is. The app saves the

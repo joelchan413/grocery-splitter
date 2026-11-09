@@ -1,6 +1,7 @@
 import webpush, { WebPushError } from 'web-push';
 import type { Trip } from '@/types';
 import type { PaidShares } from '@/lib/payments';
+import { isTransientPushFailure, PUSH_RETRY_DELAYS_MS, type PushSubscriptionRecord } from '@/lib/push-subscriptions';
 import {
   dueReminders,
   everyoneReadyMessages,
@@ -50,28 +51,41 @@ function configureWebPush(): boolean {
   return true;
 }
 
+/**
+ * Sends one notification to one device. A brief push-service outage is retried a few times;
+ * an expired subscription is removed. Once a push service accepts a message, it holds it until the phone is reachable.
+ */
+async function deliver(device: PushSubscriptionRecord, message: Outgoing['message'], attempt = 0): Promise<void> {
+  try {
+    await webpush.sendNotification({ endpoint: device.endpoint, keys: device.keys }, JSON.stringify(message), {
+      TTL: PUSH_TTL_SECONDS,
+      urgency: 'normal',
+      topic: message.tag.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32) || undefined,
+    });
+  } catch (err) {
+    const statusCode = err instanceof WebPushError ? err.statusCode : undefined;
+    if (statusCode === 404 || statusCode === 410) {
+      removePushSubscriptions([device.endpoint]);
+      return;
+    }
+    const delay = PUSH_RETRY_DELAYS_MS[attempt];
+    console.error(`Push notification failed${delay != null && isTransientPushFailure(statusCode) ? ', will retry' : ''}:`,
+      err instanceof Error ? err.message : err);
+    if (delay == null || !isTransientPushFailure(statusCode)) return;
+    setTimeout(() => {
+      // Skip the retry if the device unsubscribed or moved to another roommate meanwhile.
+      const current = getPushSubscriptions().find((s) => s.endpoint === device.endpoint);
+      if (current?.participantId === device.participantId) deliver(current, message, attempt + 1).catch(() => {});
+    }, delay).unref?.();
+  }
+}
+
 async function send(outgoing: readonly Outgoing[]): Promise<void> {
   if (!outgoing.length) return;
   const subscriptions = getPushSubscriptions();
-  const dead: string[] = [];
   await Promise.all(outgoing.flatMap(({ participantId, message }) =>
-    subscriptions
-      .filter((s) => s.participantId === participantId)
-      .map(async (s) => {
-        try {
-          await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, JSON.stringify(message), {
-            TTL: PUSH_TTL_SECONDS,
-            urgency: 'normal',
-            topic: message.tag.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32) || undefined,
-          });
-        } catch (err) {
-          // The browser unsubscribed or the subscription expired: stop sending to it.
-          if (err instanceof WebPushError && (err.statusCode === 404 || err.statusCode === 410)) dead.push(s.endpoint);
-          else console.error('Push notification failed:', err instanceof Error ? err.message : err);
-        }
-      })
+    subscriptions.filter((s) => s.participantId === participantId).map((s) => deliver(s, message))
   ));
-  if (dead.length) removePushSubscriptions(dead);
 }
 
 function sendSoon(outgoing: Outgoing[]): void {

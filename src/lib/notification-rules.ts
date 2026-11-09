@@ -275,7 +275,7 @@ export function shareIncreaseMessages(
       participantId: id,
       message: {
         title: `Your ${storeName(trip)} share went up`,
-        body: `Claims changed after you paid. You owe ${payer.name} ${formatDollars(debt.remainingCents)} more.`,
+        body: `Claims changed after you paid. You still owe ${payer.name} ${formatDollars(debt.remainingCents)}.`,
         url: tripUrl('settlement', trip),
         tag: `trip-${trip.id}`,
       },

@@ -94,7 +94,7 @@ export function Header({
           onClick={onOpenSettings}
           className="app-nav-item app-nav-settings"
           aria-label="Settings"
-          title="Receipt scanning settings"
+          title="Settings"
         >
           <Settings aria-hidden="true" />
           <span className="app-nav-label">Settings</span>

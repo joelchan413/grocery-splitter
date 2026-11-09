@@ -35,6 +35,7 @@ import {
 } from '@/lib/payments';
 import { Household, Trip } from '@/types';
 import { useTripSync } from '@/hooks/useTripSync';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { nextTripTimestamp, sameTripData, type TripSyncUpdate } from '@/lib/trip-sync';
 import { Header } from '@/components/Header';
 import { ReceiptScanner } from '@/components/ReceiptScanner';
@@ -123,6 +124,7 @@ export default function Home() {
     setIsFirstTimeSetupState(value);
   }, []);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const push = usePushNotifications();
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isIdentifyModalOpen, setIsIdentifyModalOpen] = useState(false);
   const [tripHistory, setTripHistory] = useState<Trip[]>([]);
@@ -820,6 +822,9 @@ export default function Home() {
       {isSettingsModalOpen && <SettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
+        push={push}
+        household={household}
+        defaultParticipantId={activeParticipantId}
       />}
 
       {isShareModalOpen && activeTrip && (

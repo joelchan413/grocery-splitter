@@ -130,7 +130,7 @@ test('a roommate who paid is told when claims make them owe more, once per incre
   const paid = { t1: { p2: 1000, p3: 400 } };
   const first = rules.shareIncreaseMessages(t, household, paid, {});
   assert.deepEqual(recipients(first.outgoing), ['p2']);
-  assert.equal(first.outgoing[0].message.body, 'Claims changed after you paid. You owe Joel $2.00 more.');
+  assert.equal(first.outgoing[0].message.body, 'Claims changed after you paid. You still owe Joel $2.00.');
   assert.deepEqual(plain(first.next), { p2: 200 });
 
   assert.deepEqual(rules.shareIncreaseMessages(t, household, paid, first.next).outgoing, [], 'nothing new to say');
@@ -223,16 +223,40 @@ test('damaged notification state is cleaned instead of breaking saves', () => {
 
 // ----------------- Subscriptions -----------------
 
-const browserSub = (n) => ({ endpoint: `https://push.example.com/${n}`, keys: { p256dh: 'BKey' + n, auth: 'auth' + n } });
+const browserSub = (n) => ({ endpoint: `https://fcm.googleapis.com/fcm/send/${n}`, keys: { p256dh: 'BKey' + n, auth: 'auth' + n } });
 
 test('a device subscribes once and moves when it picks another roommate', () => {
   let list = subs.upsertSubscription([], { ...browserSub(1), participantId: 'p1', createdAt: 'a' });
   list = subs.upsertSubscription(list, { ...browserSub(1), participantId: 'p2', createdAt: 'b' });
-  assert.deepEqual(list.map((s) => [s.endpoint, s.participantId]), [['https://push.example.com/1', 'p2']]);
-  assert.deepEqual(subs.removeSubscriptions(list, ['https://push.example.com/1']), []);
+  assert.deepEqual(list.map((s) => [s.endpoint, s.participantId]), [['https://fcm.googleapis.com/fcm/send/1', 'p2']]);
+  assert.deepEqual(subs.removeSubscriptions(list, ['https://fcm.googleapis.com/fcm/send/1']), []);
 });
 
-test('only HTTPS push endpoints with valid keys are accepted, and caps drop the oldest devices', () => {
+test('only real push services are accepted, so the server never sends requests to other hosts', () => {
+  for (const endpoint of [
+    'https://fcm.googleapis.com/fcm/send/abc',
+    'https://updates.push.services.mozilla.com/wpush/v2/abc',
+    'https://web.push.apple.com/abc',
+    'https://wns2-by3p.notify.windows.com/w/?token=abc',
+  ]) assert.equal(subs.isPushEndpoint(endpoint), true, endpoint);
+  for (const endpoint of [
+    'http://fcm.googleapis.com/fcm/send/abc',
+    'https://127.0.0.1/abc',
+    'https://169.254.169.254/latest/meta-data',
+    'https://grocery-splitter:3000/api/trips',
+    'https://fcm.googleapis.com.evil.example/abc',
+    'https://evilpush.services.mozilla.com.example/abc',
+    'https://user:pass@fcm.googleapis.com/abc',
+  ]) assert.equal(subs.isPushEndpoint(endpoint), false, endpoint);
+  assert.deepEqual(subs.sanitizeSubscriptions([{ endpoint: 'https://10.0.0.5/x', keys: { p256dh: 'a', auth: 'b' }, participantId: 'p1', createdAt: 'x' }]), [],
+    'devices saved before the check are dropped when read');
+});
+
+test('only network errors, rate limits and push-service outages are retried', () => {
+  assert.deepEqual([undefined, 429, 500, 503, 400, 403, 413].map(subs.isTransientPushFailure), [true, true, true, true, false, false, false]);
+});
+
+test('subscriptions need valid keys, and caps drop the oldest devices', () => {
   assert.equal(subs.parseBrowserSubscription({ ...browserSub(1), endpoint: 'http://169.254.169.254/' }), null);
   assert.equal(subs.parseBrowserSubscription({ endpoint: browserSub(1).endpoint, keys: { p256dh: 'has spaces', auth: 'x' } }), null);
   assert.ok(subs.parseBrowserSubscription(browserSub(1)));
@@ -242,5 +266,5 @@ test('only HTTPS push endpoints with valid keys are accepted, and caps drop the 
     list = subs.upsertSubscription(list, { ...browserSub(n), participantId: 'p1', createdAt: String(n) });
   }
   assert.equal(list.length, subs.MAX_SUBSCRIPTIONS_PER_PERSON);
-  assert.equal(list[0].endpoint, 'https://push.example.com/2');
+  assert.equal(list[0].endpoint, 'https://fcm.googleapis.com/fcm/send/2');
 });

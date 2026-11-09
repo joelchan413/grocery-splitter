@@ -20,14 +20,35 @@ function isKey(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= MAX_KEY_LENGTH && BASE64URL.test(value);
 }
 
-/** Push services are always HTTPS; anything else could make the server send requests elsewhere. */
+/**
+ * The push services browsers use: Google (Chrome, Android, Edge on Chromium, Samsung Internet, Brave, Opera),
+ * Mozilla (Firefox), Apple (Safari) and Microsoft (older Edge). Subscribing needs no account, so any other
+ * address is refused; otherwise anyone could make the server send requests to hosts of their choosing.
+ */
+const PUSH_HOSTS = ['fcm.googleapis.com', 'android.googleapis.com', 'web.push.apple.com'];
+const PUSH_HOST_SUFFIXES = ['.push.apple.com', '.push.services.mozilla.com', '.notify.windows.com'];
+
 export function isPushEndpoint(value: unknown): value is string {
   if (typeof value !== 'string' || value.length > MAX_ENDPOINT_LENGTH) return false;
   try {
-    return new URL(value).protocol === 'https:';
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    return url.protocol === 'https:' && !url.username && !url.password &&
+      (PUSH_HOSTS.includes(host) || PUSH_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix)));
   } catch {
     return false;
   }
+}
+
+/** Waits between attempts when a push service is briefly unavailable. */
+export const PUSH_RETRY_DELAYS_MS = [30_000, 2 * 60_000, 10 * 60_000];
+
+/**
+ * Whether a failed send is worth trying again: network errors (no status), rate limits and
+ * push-service outages. Anything else, such as an expired subscription, will fail the same way again.
+ */
+export function isTransientPushFailure(statusCode: number | undefined): boolean {
+  return statusCode == null || statusCode === 429 || statusCode >= 500;
 }
 
 /** The browser's `PushSubscription.toJSON()`, checked. */

@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { X, RefreshCw, ShieldCheck } from 'lucide-react';
+import { X, RefreshCw, ShieldCheck, Bell, BellOff } from 'lucide-react';
 import { useModalDialog } from '@/hooks/useModalDialog';
+import type { PushNotifications } from '@/hooks/usePushNotifications';
+import type { Household } from '@/types';
 
 interface ScannerStatus {
   installed: boolean;
@@ -14,9 +16,76 @@ interface ScannerStatus {
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  push: PushNotifications;
+  household: Household;
+  /** Who this device last claimed as: the starting choice for whose notifications it gets. */
+  defaultParticipantId: string;
 }
 
-export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+const PUSH_EXPLANATIONS: Record<Exclude<PushNotifications['status'], 'on' | 'off'>, string> = {
+  loading: 'Checking this device…',
+  unsupported: 'This browser can’t receive notifications. Try Chrome, Firefox or Safari.',
+  'needs-install': 'On iPhone and iPad, notifications only work from the home screen. Tap Share, then “Add to Home Screen”, and open GrocerySplit from there.',
+  'not-configured': 'The household administrator needs to set up notification keys on the server first.',
+  denied: 'Notifications are blocked for this site. Allow them in your browser or phone settings, then come back here.',
+};
+
+const selectClass =
+  'mt-1 block w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-base font-medium text-slate-900 focus:border-slate-900 focus:outline-none sm:text-sm';
+
+function NotificationSettings({ push, household, defaultParticipantId }: Pick<SettingsModalProps, 'push' | 'household' | 'defaultParticipantId'>) {
+  const { status, busy, error, enable, disable } = push;
+  const people = household.participants;
+  const linked = people.find((p) => p.id === push.participantId);
+  const [chosenId, setChosenId] = useState(() =>
+    people.some((p) => p.id === defaultParticipantId) ? defaultParticipantId : people[0]?.id ?? ''
+  );
+  const available = status === 'on' || status === 'off';
+
+  return (
+    <div className="rounded-xl border border-slate-200 p-4">
+      <p className="text-sm text-slate-500">Notifications</p>
+      <p className="mt-1 text-base font-medium text-slate-900">
+        {status === 'on' ? `On for ${linked?.name ?? 'a former roommate'}` : status === 'off' ? 'Off on this device' : 'Not available'}
+      </p>
+      <p className="mt-2 text-sm leading-relaxed text-slate-600">
+        {available
+          ? 'New trips, when everyone’s done claiming, payments you receive, and reminders to claim and pay.'
+          : PUSH_EXPLANATIONS[status]}
+      </p>
+      {available && people.length > 0 && (
+        <label className="mt-3 block text-sm font-medium text-slate-600">
+          This phone belongs to
+          <select
+            value={status === 'on' ? push.participantId ?? '' : chosenId}
+            disabled={busy}
+            onChange={(e) => {
+              setChosenId(e.target.value);
+              if (status === 'on') enable(e.target.value);
+            }}
+            className={selectClass}
+          >
+            {status === 'on' && !linked && <option value={push.participantId ?? ''} disabled>Choose a roommate</option>}
+            {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </label>
+      )}
+      {error && <p role="alert" className="mt-2 text-sm text-red-700">{error}</p>}
+      {status === 'off' && people.length > 0 && (
+        <button type="button" onClick={() => enable(chosenId)} disabled={busy || !chosenId} className="btn btn-primary btn-sm mt-3">
+          <Bell className="h-3.5 w-3.5" aria-hidden="true" /> {busy ? 'Turning on…' : 'Turn on notifications'}
+        </button>
+      )}
+      {status === 'on' && (
+        <button type="button" onClick={disable} disabled={busy} className="btn btn-secondary btn-sm mt-3">
+          <BellOff className="h-3.5 w-3.5" aria-hidden="true" /> {busy ? 'Turning off…' : 'Turn off on this device'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function SettingsModal({ isOpen, onClose, push, household, defaultParticipantId }: SettingsModalProps) {
   const [status, setStatus] = useState<ScannerStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
@@ -47,7 +116,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
           <div>
             <h2 id="settings-title" className="text-xl font-semibold text-slate-900">Settings</h2>
-            <p className="text-sm text-slate-500">Receipt scanning</p>
+            <p className="text-sm text-slate-500">Notifications and receipt scanning</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close settings" className="btn btn-quiet btn-icon -mr-2 -mt-1">
             <X className="h-5 w-5" aria-hidden="true" />
@@ -55,6 +124,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         </div>
 
         <div className="mt-5 space-y-4">
+          <NotificationSettings push={push} household={household} defaultParticipantId={defaultParticipantId} />
           <div className="rounded-xl border border-slate-200 p-4">
             <p className="text-sm text-slate-500">Receipt scanner</p>
             <p className="mt-1 text-base font-medium text-slate-900">Codex CLI</p>

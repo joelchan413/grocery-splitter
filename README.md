@@ -12,6 +12,7 @@ A collaborative receipt-scanning and grocery-splitting web application designed 
 - ⚡ **Venmo Deep Links**: 1-tap "Pay with Venmo" buttons pre-loaded with recipient handle, exact dollar balance, and note.
 - 📋 **Group Chat Summary**: Copy formatted markdown/text summaries for iMessage or WhatsApp in one tap.
 - 📜 **Trip History Archive**: Look back at past grocery runs and their item breakdowns.
+- 🔔 **Push Notifications**: New trips, everyone done claiming, payments received, shares that grew after paying, and daily reminders to claim and pay.
 
 ## 🚀 Getting Started
 
@@ -72,6 +73,33 @@ Trip and household data live in `data/database.json` on the Docker host. Docker 
 The container makes the mounted directory writable for its non-root app user at startup. If a database write or read fails, the API returns an error rather than silently using in-memory changes or overwriting a damaged file.
 
 If you deployed an earlier version that tracked `data/database.json`, preserve a copy outside the repository before pulling this change. Git may delete or refuse to replace a locally modified tracked file during that pull. Restore the backup to `data/database.json` before starting the new container.
+
+### 🔔 Push notifications
+
+Notifications use web push, which needs HTTPS (a Cloudflare Tunnel works). They stay off until the server has a key pair. Generate one once and add it to `.env` (or `.env.local`):
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+```
+VAPID_PUBLIC_KEY=<public key>
+VAPID_PRIVATE_KEY=<private key>
+VAPID_SUBJECT=mailto:you@example.com
+REMINDER_TIME_ZONE=America/New_York
+```
+
+Recreate the container with `docker compose up -d`. No rebuild is needed: the key is read when the server starts. Keep the private key secret, and keep the same pair afterward, because changing it disconnects every subscribed phone. `REMINDER_TIME_ZONE` is the household's IANA time zone; reminders are only sent between 9am and 9pm there. Without it, the server's time zone is used, which is UTC in Docker.
+
+Each roommate turns notifications on in **Settings** and picks whose phone it is. On iPhone and iPad, the app must first be added to the home screen (Share → Add to Home Screen) and opened from there.
+
+| Notification | Sent to | When |
+| --- | --- | --- |
+| New trip | Everyone except the payer | The payer confirms the receipt |
+| Everyone's done claiming | Everyone, with what they owe | Every roommate has marked themselves done (after 30 seconds, so a mistaken tap can be undone) |
+| Payment received | Whoever got paid | A payment is marked paid, combined across the trips it covers |
+| Share went up | The roommate who had paid | Claims change after they paid so they owe more (3 minutes after the edits stop) |
+| Reminder | Roommates with something to do | A day after a trip is submitted (to claim, for up to a week) or a day after everyone is done (to pay); at most once a day |
 
 ### Automated redeployment
 

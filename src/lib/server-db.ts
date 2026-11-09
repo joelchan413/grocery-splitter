@@ -5,6 +5,8 @@ import { createHash } from 'node:crypto';
 import { Household, Trip } from '@/types';
 import { sortTripHistory } from '@/lib/trip-history';
 import { clearSharesPaid, recordSharesPaid, sanitizePaidShares, type PaidShares, type ShareRef, type SharePayment } from '@/lib/payments';
+import { sanitizeNotificationState, type NotificationState } from '@/lib/notification-rules';
+import { removeSubscriptions, sanitizeSubscriptions, upsertSubscription, type PushSubscriptionRecord } from '@/lib/push-subscriptions';
 
 // Global Event Emitter and in-memory DB attached to globalThis to persist across Next.js route bundles
 const globalForDb = globalThis as unknown as {
@@ -30,6 +32,9 @@ export interface DatabaseSchema {
   hiddenTripIds?: string[];
   // How much each roommate has paid back on each trip, in cents. Optional for the same reason.
   paidShares?: PaidShares;
+  // Devices that get push notifications, and which notifications have been sent. Optional for the same reason.
+  pushSubscriptions?: PushSubscriptionRecord[];
+  notificationState?: NotificationState;
 }
 
 const DEFAULT_HOUSEHOLD: Household = {
@@ -224,6 +229,7 @@ function upsertHistory(history: Trip[], trip: Trip): Trip[] {
 
 export function saveTrip(trip: Trip): Trip {
   const db = getDatabase();
+  const before = db.trips[trip.id] ?? null;
   const tripToSave: Trip = {
     ...trip,
     updatedAt: trip.updatedAt || new Date().toISOString(),
@@ -237,6 +243,7 @@ export function saveTrip(trip: Trip): Trip {
   });
   tripEvents.emit(`trip-updated:${tripToSave.id}`, tripToSave);
   tripEvents.emit('history-updated', history);
+  tripEvents.emit('trip-saved', before, tripToSave);
   return tripToSave;
 }
 
@@ -262,6 +269,7 @@ export function updateTripPartial(tripId: string, updates: Partial<Trip>): Trip 
   });
   tripEvents.emit(`trip-updated:${tripId}`, updated);
   tripEvents.emit('history-updated', history);
+  tripEvents.emit('trip-saved', existing ?? null, updated);
   return updated;
 }
 
@@ -312,6 +320,7 @@ export function getPaidShares(): PaidShares {
 }
 
 export class UnknownShareError extends Error {}
+export class UnknownRoommateError extends Error {}
 
 /**
  * Applies a change to the household's payment record.
@@ -330,6 +339,7 @@ function updatePaidShares(shares: readonly ShareRef[], change: (current: PaidSha
 
   saveDatabase({ ...db, paidShares: next });
   tripEvents.emit('payments-updated', next);
+  tripEvents.emit('payments-saved', current, next);
   return next;
 }
 
@@ -341,4 +351,38 @@ export function recordPayments(payments: readonly SharePayment[]): PaidShares {
 /** Marks shares as unpaid again. */
 export function clearPayments(shares: readonly ShareRef[]): PaidShares {
   return updatePaidShares(shares, (current) => clearSharesPaid(current, shares));
+}
+
+// ----------------- Push notifications -----------------
+
+export function getPushSubscriptions(): PushSubscriptionRecord[] {
+  return sanitizeSubscriptions(getDatabase().pushSubscriptions);
+}
+
+/** Subscribes a device for a roommate, or moves it to them. Unknown roommates are refused. */
+export function savePushSubscription(record: PushSubscriptionRecord): void {
+  const db = getDatabase();
+  if (!db.household.participants.some((p) => p.id === record.participantId)) {
+    throw new UnknownRoommateError(`Unknown roommate: ${record.participantId}`);
+  }
+  saveDatabase({ ...db, pushSubscriptions: upsertSubscription(sanitizeSubscriptions(db.pushSubscriptions), record) });
+}
+
+export function removePushSubscriptions(endpoints: readonly string[]): void {
+  const db = getDatabase();
+  const current = sanitizeSubscriptions(db.pushSubscriptions);
+  const next = removeSubscriptions(current, endpoints);
+  if (next.length !== current.length) saveDatabase({ ...db, pushSubscriptions: next });
+}
+
+export function getNotificationState(): NotificationState {
+  return sanitizeNotificationState(getDatabase().notificationState);
+}
+
+/** Records which notifications were sent. Runs synchronously, so two changes can't interleave. */
+export function updateNotificationState(change: (current: NotificationState) => NotificationState): NotificationState {
+  const db = getDatabase();
+  const next = change(sanitizeNotificationState(db.notificationState));
+  saveDatabase({ ...db, notificationState: next });
+  return next;
 }

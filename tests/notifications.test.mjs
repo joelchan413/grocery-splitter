@@ -1,28 +1,6 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
-import ts from 'typescript';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const nodeRequire = createRequire(import.meta.url);
-
-const loaded = new Map();
-function loadLib(name) {
-  if (!loaded.has(name)) {
-    const mod = { exports: {} };
-    loaded.set(name, mod);
-    const source = fs.readFileSync(path.join(__dirname, `../src/lib/${name}.ts`), 'utf8');
-    const compiled = ts.transpileModule(source, {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
-    }).outputText;
-    new Function('module', 'exports', 'require', compiled)(mod, mod.exports, (dep) =>
-      dep.startsWith('@/lib/') ? loadLib(dep.slice(6)) : nodeRequire(dep));
-  }
-  return loaded.get(name).exports;
-}
+import { loadLib } from './helpers/load-lib.mjs';
 
 const rules = loadLib('notification-rules');
 const subs = loadLib('push-subscriptions');
@@ -92,6 +70,20 @@ test('everyone ready counts every roommate, the payer too, and tells all of them
   ]);
 });
 
+test('ready trips nobody was told about get caught up; only recent ones are announced', () => {
+  const allReady = ['p1', 'p2', 'p3'];
+  const now = new Date('2026-11-03T15:00:00.000Z');
+  const recent = trip('t1', 'p1', { p2: 10 }, { readyParticipantIds: allReady, updatedAt: '2026-11-03T14:59:00.000Z' });
+  const old = trip('t2', 'p1', { p2: 10 }, { readyParticipantIds: allReady, updatedAt: '2026-10-01T00:00:00.000Z' });
+  const told = trip('t3', 'p1', { p2: 10 }, { readyParticipantIds: allReady, updatedAt: '2026-11-03T14:59:00.000Z' });
+  const hidden = trip('t4', 'p1', { p2: 10 }, { readyParticipantIds: allReady, updatedAt: '2026-11-03T14:59:00.000Z' });
+  const waiting = trip('t5', 'p1', { p2: 10 }, { readyParticipantIds: ['p1'] });
+  const state = { ...empty(), allReady: { t3: '2026-11-03T14:00:00.000Z' } };
+  const { mark, announce } = rules.readyTripsToCatchUp([recent, old, told, hidden, waiting], household, ['t4'], state, now);
+  assert.deepEqual(mark.map((t) => t.id), ['t1', 't2']);
+  assert.deepEqual(announce.map((t) => t.id), ['t1']);
+});
+
 // ----------------- 3. Payment received -----------------
 
 test('a payment tells whoever received it, combining every trip they were paid for', () => {
@@ -144,6 +136,15 @@ test('a roommate who paid is told when claims make them owe more, once per incre
   assert.deepEqual(rules.shareIncreaseMessages(t, household, paid, first.next).outgoing, [], 'nothing new to say');
   const grew = trip('t1', 'p1', { p2: 13, p3: 4 });
   assert.equal(rules.shareIncreaseMessages(grew, household, paid, first.next).outgoing.length, 1, 'grew again');
+});
+
+test('a share that drops and then rises again is announced again', () => {
+  const paid = { t1: { p2: 1000 } };
+  const lower = rules.shareIncreaseMessages(trip('t1', 'p1', { p2: 11 }), household, paid, { p2: 200 });
+  assert.deepEqual(lower.outgoing, []);
+  assert.deepEqual(plain(lower.next), { p2: 100 });
+  const higher = rules.shareIncreaseMessages(trip('t1', 'p1', { p2: 12 }), household, paid, lower.next);
+  assert.equal(higher.outgoing.length, 1);
 });
 
 test('roommates who never paid, or whose share went down, are not told; settling up clears the record', () => {

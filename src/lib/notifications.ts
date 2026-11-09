@@ -9,6 +9,7 @@ import {
   isNewlySubmitted,
   isReminderHour,
   paymentReceivedMessages,
+  readyTripsToCatchUp,
   shareIncreaseMessages,
   tripSubmittedMessages,
   type Outgoing,
@@ -135,8 +136,19 @@ function onPaymentsSaved(before: PaidShares, after: PaidShares): void {
   sendSoon(paymentReceivedMessages(before, after, db.trips, db.household, getHiddenTripIds()));
 }
 
-function sendReminders(): void {
-  const now = new Date();
+function catchUpReadyTrips(now: Date): void {
+  const db = getDatabase();
+  const { mark, announce } = readyTripsToCatchUp(Object.values(db.trips), db.household, getHiddenTripIds(), getNotificationState(), now);
+  if (!mark.length) return;
+  const markedAt = now.toISOString();
+  updateNotificationState((state) => ({
+    ...state,
+    allReady: { ...state.allReady, ...Object.fromEntries(mark.map((trip) => [trip.id, markedAt])) },
+  }));
+  sendSoon(announce.flatMap((trip) => everyoneReadyMessages(trip, db.household)));
+}
+
+function sendReminders(now: Date): void {
   if (!isReminderHour(now, process.env.REMINDER_TIME_ZONE?.trim())) return;
   const db = getDatabase();
   const outgoing = dueReminders({
@@ -154,6 +166,12 @@ function sendReminders(): void {
     lastReminder: { ...state.lastReminder, ...Object.fromEntries(outgoing.map((o) => [o.participantId, sentAt])) },
   }));
   sendSoon(outgoing);
+}
+
+function hourlyCheck(): void {
+  const now = new Date();
+  catchUpReadyTrips(now);
+  sendReminders(now);
 }
 
 /** A handler failure must never break the save that triggered it. */
@@ -174,7 +192,7 @@ export function startNotifications(): void {
   }
   tripEvents.on('trip-saved', safely(onTripSaved));
   tripEvents.on('payments-saved', safely(onPaymentsSaved));
-  // Check reminders every hour, and soon after starting so a restart doesn't skip a day.
-  setTimeout(safely(sendReminders), 60 * 1000).unref?.();
-  setInterval(safely(sendReminders), HOUR_MS).unref?.();
+  // Check every hour, and soon after starting so a restart neither skips a day nor loses a pending ready check.
+  setTimeout(safely(hourlyCheck), 60 * 1000).unref?.();
+  setInterval(safely(hourlyCheck), HOUR_MS).unref?.();
 }

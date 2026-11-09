@@ -1,7 +1,6 @@
 /**
  * Which devices get push notifications for which roommate.
- * There are no accounts: a phone subscribes as whoever it picked in "Who are you?",
- * and moves to the new roommate when it picks someone else.
+ * There are no accounts: each phone says whose it is in Settings, and can move to another roommate there.
  */
 export interface PushSubscriptionRecord {
   endpoint: string;

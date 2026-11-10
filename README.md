@@ -101,6 +101,24 @@ Each roommate turns notifications on in **Settings** and picks whose phone it is
 | Share went up | The roommate who had paid | Claims change after they paid so they owe more (3 minutes after the edits stop) |
 | Reminder | Roommates with something to do | A day after a trip is submitted (to claim, for up to a week) or a day after everyone is done (to pay); at most once a day |
 
+### 🧾 Food spending log (529)
+
+One roommate can have their share of each trip logged to their own Google Sheet, with the receipt photos saved to a Drive folder. A row is written about a minute after a trip is fully paid: every roommate has paid the payer back (or, on a trip nobody owes on, everyone has finished claiming).
+
+Each row holds the date, store, receipt photo, that roommate's whole share with tax, their food share before tax, their non-food share before tax, and a note. Food means untaxed items, which matches grocery receipts in states that don't tax groceries, such as Iowa. Taxed food (candy, soda) counts as non-food, and untaxed non-food (bottle deposits) counts as food, so check those by hand. If the claims on a trip change after it was logged and it is paid again, its row is updated in place.
+
+Trips that were already fully paid when logging was first turned on are skipped, so rows you entered by hand aren't duplicated.
+
+Setup: open the spreadsheet, choose Extensions → Apps Script, and follow the steps at the top of [`scripts/food-tracker.gs`](scripts/food-tracker.gs). The script runs as you, so the app never gets access to your Google account. Then add to `.env`:
+
+```
+FOOD_TRACKER_URL=<web app URL from the Apps Script deployment>
+FOOD_TRACKER_SECRET=<the same SECRET as in the script>
+FOOD_TRACKER_PARTICIPANT=<your name or id in the household>
+```
+
+Recreate the container with `docker compose up -d`. The server logs `Food tracker: logged …` after each row, and retries failed sends every hour.
+
 ### Automated redeployment
 
 On the Linux Docker host, redeploy an existing running Compose installation with:

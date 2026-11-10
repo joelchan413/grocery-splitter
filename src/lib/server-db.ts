@@ -7,6 +7,7 @@ import { sortTripHistory } from '@/lib/trip-history';
 import { clearSharesPaid, recordSharesPaid, sanitizePaidShares, type PaidShares, type ShareRef, type SharePayment } from '@/lib/payments';
 import { sanitizeNotificationState, type NotificationState } from '@/lib/notification-rules';
 import { removeSubscriptions, sanitizeSubscriptions, upsertSubscription, type PushSubscriptionRecord } from '@/lib/push-subscriptions';
+import { sanitizeFoodTrackerState, type FoodTrackerState } from '@/lib/food-tracker';
 
 // Global Event Emitter and in-memory DB attached to globalThis to persist across Next.js route bundles
 const globalForDb = globalThis as unknown as {
@@ -35,6 +36,8 @@ export interface DatabaseSchema {
   // Devices that get push notifications, and which notifications have been sent. Optional for the same reason.
   pushSubscriptions?: PushSubscriptionRecord[];
   notificationState?: NotificationState;
+  // Trips logged to one roommate's food spreadsheet. Optional for the same reason.
+  foodTracker?: FoodTrackerState;
 }
 
 const DEFAULT_HOUSEHOLD: Household = {
@@ -384,5 +387,17 @@ export function updateNotificationState(change: (current: NotificationState) => 
   const db = getDatabase();
   const next = change(sanitizeNotificationState(db.notificationState));
   saveDatabase({ ...db, notificationState: next });
+  return next;
+}
+
+export function getFoodTrackerState(): FoodTrackerState {
+  return sanitizeFoodTrackerState(getDatabase().foodTracker);
+}
+
+/** Records which trips were logged to the food spreadsheet. Runs synchronously, so two changes can't interleave. */
+export function updateFoodTrackerState(change: (current: FoodTrackerState) => FoodTrackerState): FoodTrackerState {
+  const db = getDatabase();
+  const next = change(sanitizeFoodTrackerState(db.foodTracker));
+  saveDatabase({ ...db, foodTracker: next });
   return next;
 }

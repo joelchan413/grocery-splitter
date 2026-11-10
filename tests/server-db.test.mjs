@@ -65,7 +65,7 @@ function boot(files, { denyWrites = false, writes = [], failPhoto = false, failC
   vm.runInNewContext(compiled, {
     module: sandboxModule,
     exports: sandboxModule.exports,
-    require: (name) => name === '@/lib/trip-history' ? historyModule.exports : name === '@/lib/payments' ? paymentsModule.exports : name === '@/lib/notification-rules' || name === '@/lib/push-subscriptions' ? loadLib(name.slice(6)) : name === 'fs' ? fakeFs : name === 'path' ? path.posix : nodeRequire(name),
+    require: (name) => name === '@/lib/trip-history' ? historyModule.exports : name === '@/lib/payments' ? paymentsModule.exports : name === '@/lib/notification-rules' || name === '@/lib/push-subscriptions' || name === '@/lib/food-tracker' ? loadLib(name.slice(6)) : name === 'fs' ? fakeFs : name === 'path' ? path.posix : nodeRequire(name),
     process: { cwd: () => '/app' },
     console: { error: () => {} },
   });

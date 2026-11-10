@@ -32,7 +32,7 @@ function doPost(e) {
     const lock = LockService.getScriptLock();
     lock.waitLock(30000);
     try {
-      const files = savePhotos(body.photos || []);
+      const files = savePhotos(row.tripId, body.photos || []);
       upsertRow(row, files);
     } finally {
       lock.releaseLock();
@@ -43,14 +43,21 @@ function doPost(e) {
   }
 }
 
-/** Saves each photo once; a photo already in the folder under the same name is reused. */
-function savePhotos(photos) {
+/**
+ * Saves each photo once. Two trips to one store on one day share a file name, so a saved photo is
+ * recognised by the trip id in its description, not by its name.
+ */
+function savePhotos(tripId, photos) {
   const folder = DriveApp.getFolderById(FOLDER_ID);
-  return photos.map(function (photo) {
+  return photos.map(function (photo, i) {
+    const id = 'GrocerySplit trip ' + tripId + ' photo ' + (i + 1);
     const existing = folder.getFilesByName(photo.name);
-    if (existing.hasNext()) return existing.next();
+    while (existing.hasNext()) {
+      const file = existing.next();
+      if (file.getDescription() === id) return file;
+    }
     const blob = Utilities.newBlob(Utilities.base64Decode(photo.data), photo.mimeType, photo.name);
-    return folder.createFile(blob);
+    return folder.createFile(blob).setDescription(id);
   });
 }
 

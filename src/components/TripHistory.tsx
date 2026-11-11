@@ -7,7 +7,7 @@ import { calculateTripSettlement } from '@/lib/calculations';
 import { sortTripHistory } from '@/lib/trip-history';
 import { selectTripsForExport } from '@/lib/export-csv';
 import { ExportCsv } from '@/components/ExportCsv';
-import { tripPaymentStatus } from '@/lib/combined-balances';
+import { isPaidOutState, isUnpaidState, tripPaymentStatus } from '@/lib/combined-balances';
 import type { PaidShares, ShareRef, SharePayment } from '@/lib/payments';
 import { Avatar } from './Avatar';
 import { TRIP_STATUS_LABEL, formatRunDate } from './ScannerHome';
@@ -68,10 +68,7 @@ export function TripHistory({
   );
   const hiddenCount = sortedHistory.length - visibleHistory.length;
   // Counted the way Settle up counts, so the banner never promises runs it can't combine.
-  const unpaidCount = visibleHistory.filter((trip) => {
-    const status = paymentStatus.get(trip.id);
-    return trip.status !== 'review' && status && !status.payerMissing && !status.isPaidOut;
-  }).length;
+  const unpaidCount = visibleHistory.filter((trip) => isUnpaidState(paymentStatus.get(trip.id)!.state)).length;
   const listedHistory = showHidden ? sortedHistory : visibleHistory;
   const exportTrips = React.useMemo(
     () => selectTripsForExport(sortedHistory, hiddenTripIds, deselectedIds),
@@ -157,10 +154,11 @@ export function TripHistory({
             {listedHistory.slice(0, visibleCount).map((trip) => {
               const isHidden = hiddenSet.has(trip.id);
               const payments = paymentStatus.get(trip.id);
-              const canMarkPaid = trip.status !== 'review' && Boolean(payments?.debts.length);
+              const state = payments?.state ?? 'checking';
+              const canMarkPaid = isUnpaidState(state) || state === 'paid-out';
               // A run nobody owes on is paid out too, though there is nothing to mark.
-              const isPaid = trip.status !== 'review' && Boolean(payments?.isPaidOut);
-              const isPartlyPaid = canMarkPaid && !isPaid && Boolean(payments?.paidCount);
+              const isPaid = isPaidOutState(state);
+              const isPartlyPaid = state === 'partly-paid';
               const storeLabel = trip.storeName || 'Grocery store';
               const dateLabel = trip.date ? formatRunDate(trip.date) : 'unknown date';
               const payer =

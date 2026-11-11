@@ -16,6 +16,26 @@ const RETRY_MS = 30 * 1000;
 
 const revision = (trip: Pick<Trip, 'updatedAt'>) => Date.parse(trip.updatedAt || '') || 0;
 
+// Archives the server hasn't accepted, kept across reloads: a failed archive is often followed by closing the app,
+// and until it lands the server still treats the trip as open for claiming and keeps sending claim reminders.
+const ARCHIVE_KEY = 'grocery_splitter_pending_archives_v1';
+
+function loadPendingArchives(): Set<string> {
+  try {
+    const ids: unknown = JSON.parse(localStorage.getItem(ARCHIVE_KEY) || '[]');
+    return new Set(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function savePendingArchives(ids: Set<string>): void {
+  try {
+    if (ids.size) localStorage.setItem(ARCHIVE_KEY, JSON.stringify([...ids]));
+    else localStorage.removeItem(ARCHIVE_KEY);
+  } catch {}
+}
+
 export function useTripSync({ trip, onTripUpdated, onSyncError }: UseTripSyncProps) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const tripIdRef = useRef<string | null>(trip?.id || null);
@@ -25,6 +45,9 @@ export function useTripSync({ trip, onTripUpdated, onSyncError }: UseTripSyncPro
   const unsaved = useRef(new Map<string, Trip>());
   // The newest revision the server accepted per trip, so a slow failure can't mark a newer save unsaved.
   const savedRevision = useRef(new Map<string, number>());
+  const pendingArchives = useRef<Set<string> | null>(null);
+  const archives = () => (pendingArchives.current ??= loadPendingArchives());
+  const hasUnsent = useCallback(() => unsaved.current.size > 0 || archives().size > 0, []);
   const retrying = useRef(false);
   const callbacks = useRef({ onTripUpdated, onSyncError });
 
@@ -94,28 +117,40 @@ export function useTripSync({ trip, onTripUpdated, onSyncError }: UseTripSyncPro
     if (!pending || revision(pending) <= revision(updated)) unsaved.current.set(updated.id, updated);
   }, []);
 
-  // Sends each unsaved trip again. The open trip is sent as it stands now, so claims that arrived
+  // Archives a trip on the server. Returns false when it should be tried again; a refusal (such as a trip
+  // still being checked) can't succeed later, so it is dropped.
+  const sendArchive = useCallback(async (tripId: string) => {
+    const response = await fetch(`/api/trips/${encodeURIComponent(tripId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'archive' }),
+    });
+    if (response.status >= 400 && response.status < 500) console.error(`Archiving ${tripId} was refused: ${response.status}`);
+    else if (!response.ok) throw new Error(`Server returned ${response.status}`);
+    if (archives().delete(tripId)) savePendingArchives(archives());
+  }, []);
+
+  // Sends each unsaved trip again, then each archive. The open trip is sent as it stands now, so claims that arrived
   // since aren't overwritten; a trip that is no longer open is sent as this device last had it,
   // which is what its failed save would have sent. Photos go with it, in case the edit changed them.
   const retryUnsaved = useCallback(async () => {
-    if (retrying.current || unsaved.current.size === 0) return;
+    if (retrying.current || !hasUnsent()) return;
     retrying.current = true;
     try {
       for (const pending of [...unsaved.current.values()]) {
         const open = tripRef.current;
         const latest = open?.id === pending.id && !open.receiptImagesOmitted && revision(open) >= revision(pending) ? open : pending;
-        try {
-          await sendTrip(latest, false);
-        } catch (err) {
-          console.error('Retrying an unsaved trip failed:', err);
-          return;
-        }
+        await sendTrip(latest, false);
       }
-      if (unsaved.current.size === 0) callbacks.current.onSyncError(null);
+      for (const tripId of [...archives()]) await sendArchive(tripId);
+      if (!hasUnsent()) callbacks.current.onSyncError(null);
+    } catch (err) {
+      console.error('Retrying unsaved trip changes failed:', err);
+      callbacks.current.onSyncError(SYNC_ERROR);
     } finally {
       retrying.current = false;
     }
-  }, [sendTrip]);
+  }, [sendTrip, sendArchive, hasUnsent]);
 
   useEffect(() => {
     const onVisible = () => {
@@ -125,6 +160,8 @@ export function useTripSync({ trip, onTripUpdated, onSyncError }: UseTripSyncPro
     window.addEventListener('online', retryUnsaved);
     document.addEventListener('visibilitychange', onVisible);
     const timer = window.setInterval(retryUnsaved, RETRY_MS);
+    // An archive left over from an earlier visit goes out as soon as the app opens.
+    retryUnsaved();
     return () => {
       window.removeEventListener('focus', onVisible);
       window.removeEventListener('online', retryUnsaved);
@@ -143,23 +180,37 @@ export function useTripSync({ trip, onTripUpdated, onSyncError }: UseTripSyncPro
         && sameReceiptImages(trip.receiptImages, updated.receiptImages);
       await sendTrip(updated, preservePhotos);
       // The error stays until every unsaved trip, including ones no longer open, has been saved.
-      if (unsaved.current.size === 0) onSyncError(null);
+      if (!hasUnsent()) onSyncError(null);
       else retryUnsaved();
     } catch (err) {
       console.error('Failed to sync trip update with server:', err);
       markUnsaved(updated);
-      if (unsaved.current.size > 0) onSyncError(SYNC_ERROR);
+      if (hasUnsent()) onSyncError(SYNC_ERROR);
     }
-  }, [trip, onTripUpdated, onSyncError, sendTrip, markUnsaved, retryUnsaved]);
+  }, [trip, onTripUpdated, onSyncError, sendTrip, markUnsaved, retryUnsaved, hasUnsent]);
 
   // A trip whose first upload failed is retried like an unsaved edit: the server creates a trip it doesn't have.
   const saveLater = useCallback((unsent: Trip) => {
     markUnsaved(unsent);
-    if (unsaved.current.size > 0) onSyncError(SYNC_ERROR);
-  }, [markUnsaved, onSyncError]);
+    if (hasUnsent()) onSyncError(SYNC_ERROR);
+  }, [markUnsaved, onSyncError, hasUnsent]);
+
+  // Archives a trip, and keeps trying until the server accepts it.
+  const archiveTrip = useCallback(async (tripId: string) => {
+    archives().add(tripId);
+    savePendingArchives(archives());
+    try {
+      await sendArchive(tripId);
+      if (!hasUnsent()) onSyncError(null);
+    } catch (err) {
+      console.error('Error archiving trip on server:', err);
+      onSyncError(SYNC_ERROR);
+    }
+  }, [sendArchive, onSyncError, hasUnsent]);
 
   return {
     broadcastTripUpdate,
     saveLater,
+    archiveTrip,
   };
 }

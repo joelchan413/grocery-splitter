@@ -111,9 +111,15 @@ function findPerson(household: Household, id: string): Participant | undefined {
 
 // ----------------- 1. Trip submitted -----------------
 
-/** The payer confirmed the receipt, so the household can start claiming. */
-export function isNewlySubmitted(before: Trip | null, after: Trip, state: NotificationState): boolean {
-  return after.status === 'claiming' && (!before || before.status === 'review') && !state.submitted[after.id];
+/**
+ * The payer confirmed the receipt, so the household can start claiming. A trip the server didn't have
+ * counts only when it is new: an older one is a phone re-uploading it after the server lost its data.
+ */
+export function isNewlySubmitted(before: Trip | null, after: Trip, state: NotificationState, now = new Date()): boolean {
+  if (after.status !== 'claiming' || state.submitted[after.id]) return false;
+  if (before) return before.status === 'review';
+  const created = timeOf(after.createdAt);
+  return created != null && now.getTime() - created < REMINDER_DELAY_MS;
 }
 
 export function tripSubmittedMessages(trip: Trip, household: Household): Outgoing[] {

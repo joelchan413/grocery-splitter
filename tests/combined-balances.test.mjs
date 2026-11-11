@@ -86,10 +86,10 @@ test('a share that grows after it was paid shows only the difference as owed', (
   const paid = recordSharesPaid({}, [{ tripId: 't1', participantId: 'p2', cents: 1000 }]);
   const grown = trip('t1', 'p1', { p2: 25 });
   const status = tripPaymentStatus(grown, household, paid);
-  assert.equal(status.isPaidOut, false);
+  assert.equal(status.state, 'unpaid', 'a share that grew after paying is owed again');
   assert.deepEqual(plain(status.unpaid.map((d) => [d.participant.id, d.owedCents, d.paidCents, d.remainingCents])), [['p2', 2500, 1000, 1500]]);
   assert.deepEqual(summarize(combineUnpaidBalances([grown], household, paid)), [['p2', 'p1', 15]]);
-  assert.equal(tripPaymentStatus(trip('t1', 'p1', { p2: 6 }), household, paid).isPaidOut, true, 'a share that shrank stays paid');
+  assert.equal(tripPaymentStatus(trip('t1', 'p1', { p2: 6 }), household, paid).state, 'paid-out', 'a share that shrank stays paid');
 });
 
 test('trips whose payer left the household are never combined or sent to another roommate', () => {
@@ -97,7 +97,7 @@ test('trips whose payer left the household are never combined or sent to another
   const kept = trip('t2', 'p1', { p2: 3 });
   assert.deepEqual(summarize(combineUnpaidBalances([orphan, kept], household)), [['p2', 'p1', 3]]);
   assert.equal(tripPaymentStatus(orphan, household, {}).payerMissing, true);
-  assert.equal(tripPaymentStatus(orphan, household, {}).isPaidOut, false);
+  assert.equal(tripPaymentStatus(orphan, household, {}).state, 'payer-left');
   assert.deepEqual(selectUnpaidTrips([orphan, kept], household, {}, []).map((t) => t.id), ['t2']);
   assert.deepEqual(selectTripsWithMissingPayer([orphan, kept], household, []).map((t) => t.id), ['t1']);
 });
@@ -114,10 +114,11 @@ test('a trip is paid out once every roommate who owes on it has paid', () => {
   assert.deepEqual(plain(tripPaymentStatus(t, household, paid).unpaid.map((d) => d.participant.id)), ['p2', 'p3']);
   paid = recordSharesPaid(paid, [{ tripId: 't1', participantId: 'p2', cents: 1000 }]);
   assert.equal(tripPaymentStatus(t, household, paid).paidCount, 1);
-  assert.equal(tripPaymentStatus(t, household, paid).isPaidOut, false);
+  assert.equal(tripPaymentStatus(t, household, paid).state, 'partly-paid');
   paid = recordSharesPaid(paid, [{ tripId: 't1', participantId: 'p3', cents: 400 }]);
-  assert.equal(tripPaymentStatus(t, household, paid).isPaidOut, true);
-  assert.equal(tripPaymentStatus(trip('t2', 'p1', { p1: 5 }), household, {}).isPaidOut, true, 'nobody owes, nothing to pay');
+  assert.equal(tripPaymentStatus(t, household, paid).state, 'paid-out');
+  assert.equal(tripPaymentStatus(trip('t2', 'p1', { p1: 5 }), household, {}).state, 'nothing-owed', 'nobody owes, nothing to pay');
+  assert.equal(tripPaymentStatus({ ...t, status: 'review' }, household, {}).state, 'checking', 'nothing is owed while the payer checks items');
 });
 
 test('recording payments is idempotent and clearing drops trips with nobody paid', () => {

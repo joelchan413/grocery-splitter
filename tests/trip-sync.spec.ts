@@ -351,3 +351,33 @@ test('offline archiving advances past the cached revision when the phone clock i
   expect(cached.status).toBe('settled');
   expect(Date.parse(cached.updatedAt)).toBeGreaterThan(Date.parse(trip.updatedAt));
 });
+
+test('a failed claim stays reported after another save succeeds, and is sent again once the server is back', async ({ page, context, request }) => {
+  const trip = await (await request.post('/api/trips', { data: makeTrip() })).json();
+  await context.addInitScript(() => localStorage.setItem('grocery_splitter_active_participant_v1', 'p2'));
+  let failing = true;
+  await page.route(`**/api/trips/${trip.id}*`, (route) =>
+    failing && route.request().method() === 'PATCH' ? route.abort() : route.continue());
+  await page.goto(`/?trip=${trip.id}`);
+  await expect(page.getByRole('heading', { name: trip.storeName, level: 1 })).toBeVisible();
+
+  await page.getByRole('button', { name: /^Claim:/ }).first().click();
+  const banner = page.getByRole('alert').filter({ hasText: 'could not be saved' });
+  await expect(banner).toBeVisible();
+
+  // Saving the household works, but must not hide the claim that didn't save.
+  const household = page.waitForResponse((r) => r.url().endsWith('/api/household') && r.request().method() === 'POST');
+  await page.getByTitle('Edit household').click();
+  await page.getByRole('button', { name: 'Save household' }).click();
+  expect((await household).ok()).toBe(true);
+  await expect(banner).toBeVisible();
+
+  failing = false;
+  const retried = page.waitForResponse((r) => r.url().includes(`/api/trips/${trip.id}`) && r.request().method() === 'PATCH' && r.ok());
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await retried;
+  await expect(banner).toHaveCount(0);
+  const saved: Trip = await (await request.get(`/api/trips/${trip.id}`)).json();
+  expect(Object.values(saved.claims).some((claims) => claims.p2 > 0)).toBe(true);
+  expect(saved.receiptImages).toEqual([photo]);
+});

@@ -54,6 +54,9 @@ const SettlementView = dynamic(() => import('@/components/SettlementView').then(
 const TripHistory = dynamic(() => import('@/components/TripHistory').then((mod) => mod.TripHistory), { loading: loadingView });
 const SettleUp = dynamic(() => import('@/components/SettleUp').then((mod) => mod.SettleUp), { loading: loadingView });
 
+type SaveChannel = 'trip' | 'archive' | 'household' | 'hidden' | 'payments';
+const SAVE_ERROR = 'Changes could not be saved to the shared server. Keep this page open until storage is fixed.';
+
 type AppView = 'scanner' | 'review' | 'claiming' | 'settlement' | 'history' | 'settle-up';
 type TripView = Extract<AppView, 'review' | 'claiming' | 'settlement'>;
 
@@ -154,7 +157,18 @@ export default function Home() {
   const [openingTrip, setOpeningTrip] = useState(false);
   const openRequest = useRef(0);
   const historyRequest = useRef(0);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  // Each kind of save reports its own failure, so one that succeeds can't hide another that didn't.
+  const [saveErrors, setSaveErrors] = useState<Partial<Record<SaveChannel, string>>>({});
+  const setSaveError = useCallback((channel: SaveChannel, message: string | null) => {
+    setSaveErrors((prev) => {
+      if ((prev[channel] ?? null) === message) return prev;
+      const next = { ...prev };
+      if (message) next[channel] = message;
+      else delete next[channel];
+      return next;
+    });
+  }, []);
+  const setTripSaveError = useCallback((message: string | null) => setSaveError('trip', message), [setSaveError]);
 
   const confirm = useConfirm();
   const currentView = useRef(view);
@@ -198,10 +212,10 @@ export default function Home() {
   }, [setActiveTrip]);
 
   // Real-time synchronization hook
-  const { broadcastTripUpdate } = useTripSync({
+  const { broadcastTripUpdate, saveLater } = useTripSync({
     trip: activeTrip,
     onTripUpdated: handleTripUpdatedFromServer,
-    onSyncError: setSaveError,
+    onSyncError: setTripSaveError,
   });
 
   // A saved roommate who has since been removed from the household falls back to the first roommate.
@@ -400,10 +414,10 @@ export default function Home() {
         body: JSON.stringify(updated),
       });
       if (!response.ok) throw new Error(`Server returned ${response.status}`);
-      setSaveError(null);
+      setSaveError('household', null);
     } catch (err) {
       console.error('Error saving household to server:', err);
-      setSaveError('Changes could not be saved to the shared server. Keep this page open until storage is fixed.');
+      setSaveError('household', SAVE_ERROR);
     }
   };
 
@@ -438,12 +452,12 @@ export default function Home() {
         body: JSON.stringify({ tripId, hidden }),
       });
       if (!response.ok) throw new Error(`Server returned ${response.status}`);
-      setSaveError(null);
+      setSaveError('hidden', null);
     } catch (err) {
       console.error('Error saving hidden trip to server:', err);
       // Roll back so this device never disagrees with the shared list, which also drives exports.
       setHiddenTripIds((prev) => withChange(prev, !hidden));
-      setSaveError('Could not hide or unhide that trip on the shared server. Please try again.');
+      setSaveError('hidden', 'Could not hide or unhide that trip on the shared server. Please try again.');
     } finally {
       pendingHiddenSaves.current--;
     }
@@ -496,11 +510,11 @@ export default function Home() {
         });
         if (!response.ok) throw new Error(`Server returned ${response.status}`);
         confirmedPaidShares.current = sanitizePaidShares(await response.json());
-        setSaveError(null);
+        setSaveError('payments', null);
         ok = true;
       } catch (err) {
         console.error('Error saving payments to server:', err);
-        setSaveError('Could not save that payment to the shared server. Please try again.');
+        setSaveError('payments', 'Could not save that payment to the shared server. Please try again.');
         // The save may or may not have landed; ask the server. Nothing else is sent until this returns.
         const paid = await fetchPaidShares();
         if (paid) confirmedPaidShares.current = paid;
@@ -564,10 +578,9 @@ export default function Home() {
         body: JSON.stringify(newTrip),
       });
       if (!response.ok) throw new Error(`Server returned ${response.status}`);
-      setSaveError(null);
     } catch (err) {
       console.error('Failed to create trip on server:', err);
-      setSaveError('Changes could not be saved to the shared server. Keep this page open until storage is fixed.');
+      saveLater(newTrip);
     }
   };
 
@@ -597,10 +610,10 @@ export default function Home() {
         body: JSON.stringify({ action: 'archive' }),
       });
       if (!response.ok) throw new Error(`Server returned ${response.status}`);
-      setSaveError(null);
+      setSaveError('archive', null);
     } catch (err) {
       console.error('Error archiving trip on server:', err);
-      setSaveError('Changes could not be saved to the shared server. Keep this page open until storage is fixed.');
+      setSaveError('archive', SAVE_ERROR);
     }
   };
 
@@ -695,6 +708,8 @@ export default function Home() {
     );
   }
 
+  // Several failed saves can share a message; show it once.
+  const saveErrorMessages = [...new Set(Object.values(saveErrors))];
   const photos = activeTrip ? <ReceiptPhotos key={activeTrip.id} trip={activeTrip} /> : null;
   const openTrip = activeTrip && activeTrip.status !== 'settled'
     ? { name: activeTrip.storeName || 'this trip', onOpen: () => navigate(tripViewFor(activeTrip)) }
@@ -714,9 +729,9 @@ export default function Home() {
         onOpenShare={() => setIsShareModalOpen(true)}
       />
 
-      {saveError && (
+      {saveErrorMessages.length > 0 && (
         <div role="alert" className="app-main bg-red-50 px-4 py-3 text-center text-sm text-red-800">
-          {saveError}
+          {saveErrorMessages.map((message) => <p key={message}>{message}</p>)}
         </div>
       )}
 

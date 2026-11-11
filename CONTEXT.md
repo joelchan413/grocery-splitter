@@ -68,6 +68,10 @@ _Avoid_: Closed, done, cleared
 The netted sum of every unpaid share across trips, so each participant sends one payment per person they owe instead of one per trip.
 _Avoid_: Batch payment, rollup, tab
 
+**Archived Trip**:
+A trip that is no longer the open trip, stored with status `settled`. It stays editable and is separate from Paid Out: roommates can still owe on an archived trip. A trip only moves forward, from checking items to claiming to archived.
+_Avoid_: Settled (outside the stored status), closed, finished
+
 **Trip Archive**:
 A persistent chronological record of all past grocery trips, itemized claims, and settlement breakdowns.
 _Avoid_: Receipt box, history log, ledger

@@ -65,7 +65,7 @@ function boot(files, { denyWrites = false, writes = [], failPhoto = false, failC
   vm.runInNewContext(compiled, {
     module: sandboxModule,
     exports: sandboxModule.exports,
-    require: (name) => name === '@/lib/trip-history' ? historyModule.exports : name === '@/lib/payments' ? paymentsModule.exports : name === '@/lib/notification-rules' || name === '@/lib/push-subscriptions' || name === '@/lib/food-tracker' ? loadLib(name.slice(6)) : name === 'fs' ? fakeFs : name === 'path' ? path.posix : nodeRequire(name),
+    require: (name) => name === '@/lib/trip-history' ? historyModule.exports : name === '@/lib/payments' ? paymentsModule.exports : name === '@/lib/notification-rules' || name === '@/lib/push-subscriptions' || name === '@/lib/food-tracker' || name === '@/lib/trip-status' ? loadLib(name.slice(6)) : name === 'fs' ? fakeFs : name === 'path' ? path.posix : nodeRequire(name),
     process: { cwd: () => '/app' },
     console: { error: () => {} },
   });
@@ -157,6 +157,39 @@ test('shared history order survives reopening, updates, archiving, and restart',
   db.archiveTrip('older');
   assert.deepEqual(ids(db), ['a', 'b', 'older']);
   assert.deepEqual(ids(boot(files)), ['a', 'b', 'older']);
+});
+
+test('a stale save cannot move a trip backwards, but its other edits still land', () => {
+  const initial = storedDatabase();
+  initial.trips.t1 = { id: 't1', status: 'claiming', storeName: 'Original', claims: {} };
+  const files = new Map([['/app/data/database.json', JSON.stringify(initial)]]);
+  const db = boot(files);
+  const saved = [];
+  db.tripEvents.on('trip-saved', (before, after) => saved.push([before?.status, after.status]));
+
+  const patched = db.updateTripPartial('t1', { status: 'review', claims: { milk: { p2: 1 } } });
+  assert.equal(patched.status, 'claiming');
+  assert.deepEqual(JSON.parse(JSON.stringify(patched.claims)), { milk: { p2: 1 } });
+  db.saveTrip({ id: 't1', status: 'review', storeName: 'Reuploaded', claims: {} });
+  assert.equal(db.getTrip('t1').status, 'claiming');
+  assert.equal(db.getTrip('t1').storeName, 'Reuploaded');
+  assert.deepEqual(saved, [['claiming', 'claiming'], ['claiming', 'claiming']], 'notifications never see a trip go back to review');
+
+  db.archiveTrip('t1');
+  db.updateTripPartial('t1', { status: 'claiming', storeName: 'Fixed after archiving' });
+  assert.equal(boot(files).getTrip('t1').status, 'settled');
+  assert.equal(boot(files).getTrip('t1').storeName, 'Fixed after archiving');
+});
+
+test('a trip still being checked cannot be archived', () => {
+  const initial = storedDatabase();
+  initial.trips.t1 = { id: 't1', status: 'review', storeName: 'Original' };
+  initial.activeTripId = 't1';
+  const files = new Map([['/app/data/database.json', JSON.stringify(initial)]]);
+  const db = boot(files);
+  assert.throws(() => db.archiveTrip('t1'), db.TripStatusError);
+  assert.equal(boot(files).getTrip('t1').status, 'review');
+  assert.equal(db.getActiveTrip().id, 't1');
 });
 
 test('hidden trips persist across restart, are idempotent, and leave trips untouched', () => {

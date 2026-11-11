@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withoutReceiptImages } from '@/lib/trip-sync';
-import { getTrip, updateTripPartial, archiveTrip } from '@/lib/server-db';
+import { getTrip, updateTripPartial, archiveTrip, TripStatusError } from '@/lib/server-db';
 
 export async function GET(
   req: NextRequest,
@@ -81,6 +81,7 @@ export async function POST(
     }
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (err: unknown) {
+    if (err instanceof TripStatusError) return NextResponse.json({ error: err.message }, { status: 409 });
     return NextResponse.json({ error: (err instanceof Error ? err.message : 'Unexpected server error') }, { status: 500 });
   }
 }

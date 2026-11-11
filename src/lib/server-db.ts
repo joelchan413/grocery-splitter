@@ -8,6 +8,7 @@ import { clearSharesPaid, recordSharesPaid, sanitizePaidShares, type PaidShares,
 import { sanitizeNotificationState, type NotificationState } from '@/lib/notification-rules';
 import { removeSubscriptions, sanitizeSubscriptions, upsertSubscription, type PushSubscriptionRecord } from '@/lib/push-subscriptions';
 import { sanitizeFoodTrackerState, type FoodTrackerState } from '@/lib/food-tracker';
+import { canChangeStatus, isTripStatus, nextTripStatus } from '@/lib/trip-status';
 
 // Global Event Emitter and in-memory DB attached to globalThis to persist across Next.js route bundles
 const globalForDb = globalThis as unknown as {
@@ -235,6 +236,7 @@ export function saveTrip(trip: Trip): Trip {
   const before = db.trips[trip.id] ?? null;
   const tripToSave: Trip = {
     ...trip,
+    status: nextTripStatus(before?.status, trip.status),
     updatedAt: trip.updatedAt || new Date().toISOString(),
   };
   const history = upsertHistory(db.history, tripToSave);
@@ -258,6 +260,7 @@ export function updateTripPartial(tripId: string, updates: Partial<Trip>): Trip 
   const updated: Trip = {
     ...(existing || (updates as Trip)),
     ...updates,
+    status: nextTripStatus(existing?.status, updates.status ?? existing?.status),
     updatedAt: new Date().toISOString(),
   };
 
@@ -276,10 +279,15 @@ export function updateTripPartial(tripId: string, updates: Partial<Trip>): Trip 
   return updated;
 }
 
+export class TripStatusError extends Error {}
+
 export function archiveTrip(tripId: string): Trip | null {
   const db = getDatabase();
   const trip = db.trips[tripId];
   if (!trip) return null;
+  if (isTripStatus(trip.status) && !canChangeStatus(trip.status, 'settled')) {
+    throw new TripStatusError('Finish checking the items before archiving this trip');
+  }
 
   const archived = { ...trip, status: 'settled' as const };
   const history = upsertHistory(db.history, archived);

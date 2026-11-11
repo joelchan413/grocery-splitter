@@ -46,11 +46,18 @@ test('a trip confirmed out of review tells everyone but the payer, with the tota
 
 test('a trip is announced once, and never while it is still being reviewed or for later saves', () => {
   const claiming = trip('t1', 'p1', { p2: 10 });
-  assert.equal(rules.isNewlySubmitted(null, claiming, empty()), true, 'uploaded straight into claiming');
-  assert.equal(rules.isNewlySubmitted(null, { ...claiming, status: 'review' }, empty()), false);
+  const soon = new Date('2026-11-01T12:30:00.000Z');
+  assert.equal(rules.isNewlySubmitted(null, claiming, empty(), soon), true, 'uploaded straight into claiming');
+  assert.equal(rules.isNewlySubmitted(null, { ...claiming, status: 'review' }, empty(), soon), false);
   assert.equal(rules.isNewlySubmitted(claiming, claiming, empty()), false, 'a claim on a trip already claiming');
   const state = { ...empty(), submitted: { t1: '2026-11-01T12:00:00.000Z' } };
   assert.equal(rules.isNewlySubmitted({ ...claiming, status: 'review' }, claiming, state), false, 'sent back to review and confirmed again');
+});
+
+test('a phone re-uploading an older trip after the server lost its data does not announce it again', () => {
+  const claiming = trip('t1', 'p1', { p2: 10 });
+  assert.equal(rules.isNewlySubmitted(null, claiming, empty(), new Date('2026-11-03T12:00:00.000Z')), false);
+  assert.equal(rules.isNewlySubmitted(null, { ...claiming, createdAt: undefined }, empty(), new Date('2026-11-01T12:30:00.000Z')), false);
 });
 
 // ----------------- 2. Everyone ready -----------------

@@ -68,10 +68,9 @@ export function findTrackedParticipant(household: Household, idOrName: string | 
  * also needs everyone done claiming, or it would count as paid the moment it was submitted.
  */
 export function isTripFullyPaid(trip: Trip, household: Household, paid: PaidShares, hiddenIds: readonly string[]): boolean {
-  if (trip.status === 'review' || hiddenIds.includes(trip.id)) return false;
-  const status = tripPaymentStatus(trip, household, paid);
-  if (!status.isPaidOut) return false;
-  return status.debts.length > 0 || isEveryoneReady(trip, household);
+  if (hiddenIds.includes(trip.id)) return false;
+  const { state } = tripPaymentStatus(trip, household, paid);
+  return state === 'paid-out' || (state === 'nothing-owed' && isEveryoneReady(trip, household));
 }
 
 /** One roommate's share of a trip in cents: total, food and non-food. Food and non-food are before tax. */

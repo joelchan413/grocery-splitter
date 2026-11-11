@@ -381,3 +381,25 @@ test('a failed claim stays reported after another save succeeds, and is sent aga
   expect(Object.values(saved.claims).some((claims) => claims.p2 > 0)).toBe(true);
   expect(saved.receiptImages).toEqual([photo]);
 });
+
+test('a failed archive is sent again, even after the app is closed and reopened', async ({ page, context, request }) => {
+  const trip = await (await request.post('/api/trips', { data: { ...makeTrip(), storeName: 'Archive retry' } })).json();
+  await context.addInitScript(() => localStorage.setItem('grocery_splitter_active_participant_v1', 'p2'));
+  let failing = true;
+  await page.route(`**/api/trips/${trip.id}`, (route) =>
+    failing && route.request().method() === 'POST' ? route.abort() : route.continue());
+  await page.goto(`/?trip=${trip.id}`);
+  await page.getByRole('button', { name: /View balances/ }).first().click();
+  await page.getByRole('button', { name: 'Finish and archive', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Trip history' })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'could not be saved' })).toBeVisible();
+  expect((await (await request.get(`/api/trips/${trip.id}`)).json()).status).toBe('claiming');
+
+  failing = false;
+  const archived = page.waitForResponse((r) => r.url().endsWith(`/api/trips/${trip.id}`) && r.request().method() === 'POST' && r.ok());
+  await page.reload();
+  await archived;
+  expect((await (await request.get(`/api/trips/${trip.id}`)).json()).status).toBe('settled');
+  await expect(page.getByRole('alert').filter({ hasText: 'could not be saved' })).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('grocery_splitter_pending_archives_v1'))).toBeNull();
+});

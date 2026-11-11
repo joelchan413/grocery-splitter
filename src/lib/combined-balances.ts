@@ -35,7 +35,23 @@ export interface TripDebt {
 }
 
 /**
- * Where a trip's repayments stand. A trip on which nobody owes anything is already paid out.
+ * Where a trip's repayments stand, as one state every screen reads the same way:
+ * - checking: the payer is still checking the items, so nothing is owed yet
+ * - payer-left: whoever paid has left the household, so there is nobody to repay
+ * - nothing-owed: nobody owes the payer anything; counts as paid out
+ * - unpaid / partly-paid: some or all of those who owe haven't paid in full
+ * - paid-out: everyone who owes has paid in full
+ * A paid-out trip goes back to partly paid or unpaid when claims change and a share grows.
+ */
+export type TripPaymentState = 'checking' | 'payer-left' | 'nothing-owed' | 'unpaid' | 'partly-paid' | 'paid-out';
+
+/** Trips Settle up still combines. */
+export const isUnpaidState = (state: TripPaymentState) => state === 'unpaid' || state === 'partly-paid';
+/** Trips nobody owes anything on any more, including ones nobody ever owed on. */
+export const isPaidOutState = (state: TripPaymentState) => state === 'paid-out' || state === 'nothing-owed';
+
+/**
+ * The detail behind a trip's payment state.
  * When whoever paid has left the household there is nobody to repay, so `payerMissing` is set and
  * the trip is never paid out or combined (the settlement would otherwise name another roommate as payer).
  */
@@ -56,12 +72,20 @@ export function tripPaymentStatus(
           return { participant: s.participant, owedCents, paidCents: already, remainingCents: Math.max(0, owedCents - already) };
         });
   const unpaid = debts.filter((d) => d.remainingCents > 0);
+  const paidCount = debts.length - unpaid.length;
+  const state: TripPaymentState =
+    trip.status === 'review' ? 'checking'
+    : payerMissing ? 'payer-left'
+    : debts.length === 0 ? 'nothing-owed'
+    : unpaid.length === 0 ? 'paid-out'
+    : paidCount > 0 ? 'partly-paid'
+    : 'unpaid';
   return {
+    state,
     payerMissing,
     debts,
     unpaid,
-    paidCount: debts.length - unpaid.length,
-    isPaidOut: !payerMissing && unpaid.length === 0,
+    paidCount,
   };
 }
 
@@ -84,11 +108,7 @@ export function selectUnpaidTrips(
   statusFor = (trip: Trip) => tripPaymentStatus(trip, household, paid)
 ): Trip[] {
   const hidden = new Set(hiddenIds);
-  return trips.filter((trip) => {
-    if (!trip || trip.status === 'review' || hidden.has(trip.id)) return false;
-    const status = statusFor(trip);
-    return !status.payerMissing && !status.isPaidOut;
-  });
+  return trips.filter((trip) => trip && !hidden.has(trip.id) && isUnpaidState(statusFor(trip).state));
 }
 
 /** Unpaid-looking trips that can't be combined because whoever paid has left the household. */

@@ -54,7 +54,7 @@ const SettlementView = dynamic(() => import('@/components/SettlementView').then(
 const TripHistory = dynamic(() => import('@/components/TripHistory').then((mod) => mod.TripHistory), { loading: loadingView });
 const SettleUp = dynamic(() => import('@/components/SettleUp').then((mod) => mod.SettleUp), { loading: loadingView });
 
-type SaveChannel = 'trip' | 'archive' | 'household' | 'hidden' | 'payments';
+type SaveChannel = 'trip' | 'household' | 'hidden' | 'payments';
 const SAVE_ERROR = 'Changes could not be saved to the shared server. Keep this page open until storage is fixed.';
 
 type AppView = 'scanner' | 'review' | 'claiming' | 'settlement' | 'history' | 'settle-up';
@@ -212,7 +212,7 @@ export default function Home() {
   }, [setActiveTrip]);
 
   // Real-time synchronization hook
-  const { broadcastTripUpdate, saveLater } = useTripSync({
+  const { broadcastTripUpdate, saveLater, archiveTrip: archiveTripOnServer } = useTripSync({
     trip: activeTrip,
     onTripUpdated: handleTripUpdatedFromServer,
     onSyncError: setTripSaveError,
@@ -602,19 +602,7 @@ export default function Home() {
     setActiveTrip(null);
     saveActiveTrip(null);
     navigate('history');
-
-    try {
-      const response = await fetch(`/api/trips/${encodeURIComponent(settledTrip.id)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'archive' }),
-      });
-      if (!response.ok) throw new Error(`Server returned ${response.status}`);
-      setSaveError('archive', null);
-    } catch (err) {
-      console.error('Error archiving trip on server:', err);
-      setSaveError('archive', SAVE_ERROR);
-    }
+    await archiveTripOnServer(settledTrip.id);
   };
 
   const handleOpenTrip = async (selected: Trip, view: AppView | null = null, mode: 'push' | 'replace' = 'push') => {

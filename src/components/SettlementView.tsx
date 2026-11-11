@@ -58,7 +58,7 @@ export function SettlementView({
   );
   const tracksPayments = Boolean(onRecordPayments && onClearPayments) && !payments.payerMissing && payments.debts.length > 0;
   const debtFor = (participantId: string) => payments.debts.find((d) => d.participant.id === participantId);
-  const isPaidOut = payments.isPaidOut && payments.debts.length > 0;
+  const isPaidOut = payments.state === 'paid-out';
   const receivedCents = payments.debts.reduce((acc, d) => acc + Math.min(d.paidCents, d.owedCents), 0);
   // Marking paid records each roommate's full share as it stands now.
   const markPaid = (debts: TripDebt[]) =>

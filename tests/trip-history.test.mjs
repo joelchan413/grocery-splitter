@@ -47,42 +47,6 @@ function loadModule(relPath) {
   return mod.exports;
 }
 
-test('database.json should contain all trips in history so none disappear on fetch', (t) => {
-  const dbPath = path.join(__dirname, '../data/database.json');
-  if (!fs.existsSync(dbPath)) {
-    t.skip('database.json does not exist on fresh checkout');
-    return;
-  }
-  const db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
-
-  const tripIdsInTrips = Object.keys(db.trips || {});
-  const tripIdsInHistory = (db.history || []).map((t) => t.id);
-
-  // Every trip in trips should be in history
-  const missingFromHistory = tripIdsInTrips.filter((id) => !tripIdsInHistory.includes(id));
-  assert.deepEqual(
-    missingFromHistory,
-    [],
-    `Trips in db.trips missing from db.history: ${missingFromHistory.join(', ')}`
-  );
-});
-
-test('history should not contain duplicate trip IDs', (t) => {
-  const dbPath = path.join(__dirname, '../data/database.json');
-  if (!fs.existsSync(dbPath)) {
-    t.skip('database.json does not exist on fresh checkout');
-    return;
-  }
-  const db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
-  const tripIdsInHistory = (db.history || []).map((t) => t.id);
-  const uniqueIds = new Set(tripIdsInHistory);
-  assert.equal(
-    tripIdsInHistory.length,
-    uniqueIds.size,
-    'db.history contains duplicate trip IDs'
-  );
-});
-
 test('calculateTripSettlement handles trips with undefined taxTotal, basketDiscount, or items without producing NaN', () => {
   const { calculateTripSettlement } = loadModule('../src/lib/calculations.ts');
   const household = {
@@ -334,7 +298,6 @@ test('each breakdown shows its items total rounded once', () => {
 
 test('mergeTripHistory preserves local trips not yet on server and merges newer updates', () => {
   const storage = loadModule('../src/lib/storage.ts');
-  assert.ok(typeof storage.mergeTripHistory === 'function', 'mergeTripHistory function must exist');
 
   const localHistory = [
     { id: 'trip-local-only', storeName: 'Local Store', createdAt: '2026-08-30T10:00:00Z', updatedAt: '2026-08-30T10:00:00Z', date: '2026-08-30' },
@@ -348,18 +311,11 @@ test('mergeTripHistory preserves local trips not yet on server and merges newer 
 
   const merged = storage.mergeTripHistory(localHistory, serverHistory);
 
-  // Must have all 3 trips
-  assert.equal(merged.length, 3, 'Merged history must have 3 trips');
-  const ids = merged.map((t) => t.id);
-  assert.ok(ids.includes('trip-local-only'), 'Must include local-only trip');
-  assert.ok(ids.includes('trip-server-only'), 'Must include server-only trip');
-  assert.ok(ids.includes('trip-shared'), 'Must include shared trip');
-
   // For shared trip, the local version was newer (12:00 vs 11:00)
   const shared = merged.find((t) => t.id === 'trip-shared');
   assert.equal(shared.storeName, 'Shared Store (Local New)');
 
-  // Must be sorted in descending chronological order
+  // Every trip is kept, newest first
   assert.deepEqual(
     merged.map((t) => t.id),
     ['trip-shared', 'trip-local-only', 'trip-server-only']

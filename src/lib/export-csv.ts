@@ -1,7 +1,7 @@
 import type { Household, Trip } from '@/types';
 import { calculateTripSettlement } from '@/lib/calculations';
 
-export const EXPORT_COLUMNS = [
+const EXPORT_COLUMNS = [
   'date',
   'store',
   'receipt_total',

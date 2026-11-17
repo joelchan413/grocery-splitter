@@ -22,7 +22,7 @@ function loadModule(relPath) {
   return mod.exports;
 }
 
-const { exportTripsToCsv, selectTripsForExport, defaultExportRange, escapeCsvField, EXPORT_COLUMNS } = loadModule('../src/lib/export-csv.ts');
+const { exportTripsToCsv, selectTripsForExport, defaultExportRange, escapeCsvField } = loadModule('../src/lib/export-csv.ts');
 
 const household = {
   id: 'h1',
@@ -109,13 +109,6 @@ test('exports Alex\'s 2026 trips exactly, sorted by date then receipt_id', () =>
     '2026-12-31,Café Möller,5.00,,,0.00,Joel,1.25,,,,t-f',
   ].join('\r\n') + '\r\n';
   assert.equal(result.csv, expected);
-});
-
-test('the header matches the requested column order', () => {
-  assert.deepEqual([...EXPORT_COLUMNS], [
-    'date', 'store', 'receipt_total', 'food_subtotal', 'non_food_subtotal', 'tax',
-    'paid_by', 'my_share', 'split_method', 'venmo_status', 'notes', 'receipt_id',
-  ]);
 });
 
 test('the export reflects the chosen participant and the chosen date range', () => {

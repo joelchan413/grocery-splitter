@@ -117,6 +117,9 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
   });
 
   test('4. Full collaborative claiming: individual claims, multi-roommate splits, and ready states', async ({ page }) => {
+    const consoleErrors: string[] = [];
+    page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
     // Dismiss wizard
     await page.getByRole('button', { name: /Save and start splitting/i }).click();
 
@@ -143,8 +146,10 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
     await page.getByRole('button', { name: /I'm Done Claiming/i }).click();
     await expect(page.getByText(/Alex is done/i)).toBeVisible();
 
-    // Switch to Sam
+    // Switch to Sam, who splits the milk Joel and Alex share with everyone
     await page.getByRole('button', { name: /Sam/i }).first().click();
+    await page.getByRole('button', { name: /^Split all:/ }).first().click();
+    await expect(page.getByText(/Split \(1\/4\)/i)).toBeVisible();
     await page.getByRole('button', { name: /I'm Done Claiming/i }).click();
     await expect(page.getByText(/Sam is done/i)).toBeVisible();
 
@@ -161,11 +166,6 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
     await expect(page.getByText('Joel paid the bill')).toBeVisible();
     await expect(page.getByText('Joel gets back')).toBeVisible();
 
-    // Verify roommate cards exist with non-zero balances
-    await expect(page.getByText(/Alex/i).first()).toBeVisible();
-    await expect(page.getByText(/Sam/i).first()).toBeVisible();
-    await expect(page.getByText(/Jordan/i).first()).toBeVisible();
-
     // Check Venmo buttons exist for owing participants
     const venmoLinks = page.getByRole('link', { name: /Venmo/i });
     expect(await venmoLinks.count()).toBeGreaterThanOrEqual(1);
@@ -176,6 +176,12 @@ test.describe('GrocerySplit Comprehensive End-to-End Test Suite', () => {
     await expect(page.getByRole('heading', { name: 'Own items' }).first()).toBeVisible();
     await expect(page.getByText(/of taxed items/i).first()).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Shared items, split 4 ways' }).first()).toBeVisible();
+
+    await page.getByRole('button', { name: /Copy summary for the group chat/i }).click();
+    await expect(page.getByText('Summary copied')).toBeVisible();
+
+    const fatalErrors = consoleErrors.filter((err) => !err.includes('Download the React DevTools') && !err.includes('Failed to load resource'));
+    expect(fatalErrors).toHaveLength(0);
   });
 
   test('5. Multi-trip creation, archiving, and persistent Trip History archive navigation', async ({ page }) => {

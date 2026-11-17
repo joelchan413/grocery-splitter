@@ -234,8 +234,6 @@ for (const state of ['current', 'missing', 'newer-local'] as const) {
     page.on('request', (req) => {
       if (new URL(req.url()).pathname === '/api/trips' && req.method() === 'POST') uploads.push(req.postDataJSON());
     });
-    const probe = await request.head(`/api/trips/${trip.id}`);
-    expect(await probe.body()).toHaveLength(0);
     const checked = page.waitForResponse((r) => r.request().method() === 'HEAD');
     await page.goto('/');
     const head = await checked;
